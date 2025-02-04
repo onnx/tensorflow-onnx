@@ -204,8 +204,15 @@ class Select:
                 if eq_node.input[0] == eq_node.input[1]:
                     handles_nan = True
             for inp in node.inputs[1:]:
-                if inp.is_const() and np.any(np.isnan(inp.get_tensor_value(as_list=False))):
+                if handles_nan:
+                    break
+                if inp.is_const() and (np.any(np.isnan(inp.get_tensor_value(as_list=False))) or \
+                                       np.any(np.isinf(inp.get_tensor_value(as_list=False)))):
                     handles_nan = True
+                if inp.type == "Mul":
+                    inp0 = inp.inputs[0].is_const() and np.any(np.isinf(inp.inputs[0].get_tensor_value(as_list=False)))
+                    inp1 = inp.inputs[1].is_const() and np.any(np.isinf(inp.inputs[1].get_tensor_value(as_list=False)))
+                    handles_nan = inp0 or inp1
 
         if ctx.get_dtype(node.output[0]) != TensorProto.STRING and not handles_nan:
             # Due to bad ORT implementation, Mul/Add ops are faster than Where op
@@ -381,29 +388,32 @@ class While:
         # may be removed from output_names below
         output_names = node.output.copy()
 
-        # Make maximum_iterations int64 and replace -1(tf) with maxsize(onnx). If the const node has no other
+        # Make maximum_iterations int64. If the const node has no other
         # consumers, modify it in place. Otherwise, make a new const node and leave the original unchanged.
         # if maximum_iterations is not const,should add an cast node(cast to int64)
         maximum_iterations_name = node.input[1]
         if node.inputs[1].is_const():
             maximum_iterations = node.inputs[1].get_tensor_value()
-            if maximum_iterations == -1:
-                maximum_iterations = np.iinfo(np.int64).max
-            consumers = ctx.find_output_consumers(maximum_iterations_name)
-            external_consumers = [c for c in consumers if c != node and c.type != 'TensorListReserve']
-            if len(external_consumers) == 0:
-                ctx.remove_node(node.inputs[1].name)
+            # maximum_iterations with -1(tf) means it doesn't set the maximum count.
+            # For onnx Loop op optional input `M`(int64), represents a maximum trip-count. Set empty string to skip.
+            if maximum_iterations != -1:
+                consumers = ctx.find_output_consumers(maximum_iterations_name)
+                external_consumers = [c for c in consumers if c != node and c.type != 'TensorListReserve']
+                if len(external_consumers) == 0:
+                    ctx.remove_node(node.inputs[1].name)
+                else:
+                    maximum_iterations_name = utils.make_name(node.inputs[1].name)
+                ctx.make_const(maximum_iterations_name, np.array(maximum_iterations, dtype=np.int64))
+                ctx.replace_input(node, node.input[1], maximum_iterations_name, 1)
+                maximum_iterations_m = maximum_iterations_name
             else:
-                maximum_iterations_name = utils.make_name(node.inputs[1].name)
-            ctx.make_const(maximum_iterations_name, np.array(maximum_iterations, dtype=np.int64))
-            ctx.replace_input(node, node.input[1], maximum_iterations_name, 1)
-            maximum_iterations_int64 = maximum_iterations_name
+                maximum_iterations_m = ""
         else:
             cast_inputs = [maximum_iterations_name]
             attr = {"to": onnx_pb.TensorProto.INT64}
             cast_name = node.name + "_cast"
             cast_node = ctx.make_node("Cast", cast_inputs, attr, name=cast_name)
-            maximum_iterations_int64 = cast_node.output[0]
+            maximum_iterations_m = cast_node.output[0]
 
         cond_name = node.get_attr_str("cond")
         cond_graph = find_function(cond_name)
@@ -427,7 +437,7 @@ class While:
                 cond_input_to_state_var[cond_graph.input_names[idx]] = maximum_iterations_name
                 continue
             if idx < 2:
-                # skip  [0,1] loop_counter, max_iterations
+                # skip [0,1] loop_counter, max_iterations
                 continue
             n = node.inputs[idx]
             if n.type in ["TensorListReserve", "TensorListResize"]:
@@ -511,7 +521,7 @@ class While:
         output_names = output_names[2:]
 
         branches = {"body": body}
-        loop_node = ctx.make_node("Loop", [maximum_iterations_int64, cond_outputs[0]] + loop_vars,
+        loop_node = ctx.make_node("Loop", [maximum_iterations_m, cond_outputs[0]] + loop_vars,
                                   output_count=len(output_shapes), name=node.name + "_loop",
                                   shapes=output_shapes, dtypes=output_dtypes, skip_conversion=True,
                                   branches=branches)
@@ -561,7 +571,8 @@ def wire_while_body(parent_g, g, loop_node, body_input_to_state_var, cond_input_
     g.set_dtype(func_inputs[0], onnx_pb.TensorProto.INT64)
     g.inputs = [g.get_node_by_output(inp) for inp in func_inputs]
 
-    for p, c in zip(loop_node.input, func_inputs):
+    # we should use outputs shape, not inputs, since there may be shape invariants
+    for p, c in zip(loop_node.output, func_inputs[2:]):
         g.copy_shape(p, c)
 
     for i, node in enumerate(g.inputs):
@@ -720,7 +731,15 @@ def inline_subgraph(parent, g, scope, binding):
     for n in g.get_nodes():
         dtypes = n.output_dtypes
         shapes = n.output_shapes
-        n.graph = parent
+        subgraphs = n.get_body_graphs()
+
+        n.graph = parent # we must change node graph exactly here so that previous/following code can work
+
+        # if n has subgraphs, we need to set the correct parent graph for them
+        if subgraphs:
+            for sub_name, sub_graph in subgraphs.items():
+                n.set_body_graph_as_attr(sub_name, sub_graph)
+
         for name, shape, dtype in zip(n.output, shapes, dtypes):
             # FIXME: don't access this directly
             parent._output_shapes[name] = shape  # pylint: disable=protected-access

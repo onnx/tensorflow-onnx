@@ -82,14 +82,15 @@ class GraphBuilder(object):
             return node
         return node.output[0]
 
-    def make_reduce_sum(self, kwargs, name=None, shapes=None, dtypes=None, op_name_scope=None):
+    def _make_reduce_op(self, op_name, since_opset, kwargs, name=None, shapes=None, dtypes=None, op_name_scope=None):
         """
         ReduceSum changes its schema at opset 13: it treats some axes as dynamic input
         kwargs: key could be ["data", "axes", "keepdims", "noop_with_empty_axes", "outputs"].
+        After opset 18, all of Reduce* ops has taken the same change.
         """
         outputs = kwargs.pop("outputs", None)
 
-        if self.graph.opset < 13:
+        if self.graph.opset < since_opset:
             data = kwargs.pop("data")
             axes = self.convert_to_attribute(kwargs.pop("axes", None), is_optional=True)
             keepdims = kwargs.pop("keepdims", 1)
@@ -102,9 +103,11 @@ class GraphBuilder(object):
             keepdims = kwargs.pop("keepdims", 1)
             noop_with_empty_axes = kwargs.pop("noop_with_empty_axes", 0)
             data = self.convert_to_input(kwargs.pop("data"), "const_data")
-            axes = self.convert_to_input(kwargs.pop("axes", None), "const_axes", is_optional=True, dtype=np.int64)
             attr = {"keepdims": keepdims, "noop_with_empty_axes": noop_with_empty_axes}
-            inputs = [data, axes]
+            inputs = [data]
+            if "axes" in kwargs.keys():
+                axes = self.convert_to_input(kwargs.pop("axes", None), "const_axes", is_optional=True, dtype=np.int64)
+                inputs.append(axes)
 
         utils.make_sure(not kwargs, "kwargs contains un-used key")
 
@@ -114,9 +117,57 @@ class GraphBuilder(object):
                 new_attr[key] = val
         attr = new_attr
 
-        return self.graph.make_node(op_type="ReduceSum", inputs=inputs, attr=attr, name=name,
+        return self.graph.make_node(op_type=op_name, inputs=inputs, attr=attr, name=name,
                                     outputs=outputs, shapes=shapes, dtypes=dtypes,
                                     op_name_scope=op_name_scope).output[0]
+
+    def make_reduce_max(self, kwargs, name=None, shapes=None, dtypes=None, op_name_scope=None):
+        """
+        ReduceMax changes its schema at opset 18: it treats some axes as dynamic input
+        kwargs: key could be ["data", "axes", "keepdims", "noop_with_empty_axes", "outputs"].
+        """
+
+        return self._make_reduce_op("ReduceMax", 18, kwargs, name, shapes, dtypes, op_name_scope)
+
+    def make_reduce_mean(self, kwargs, name=None, shapes=None, dtypes=None, op_name_scope=None):
+        """
+        ReduceMean changes its schema at opset 18: it treats some axes as dynamic input
+        kwargs: key could be ["data", "axes", "keepdims", "noop_with_empty_axes", "outputs"].
+        """
+
+        return self._make_reduce_op("ReduceMean", 18, kwargs, name, shapes, dtypes, op_name_scope)
+
+    def make_reduce_min(self, kwargs, name=None, shapes=None, dtypes=None, op_name_scope=None):
+        """
+        ReduceMin changes its schema at opset 18: it treats some axes as dynamic input
+        kwargs: key could be ["data", "axes", "keepdims", "noop_with_empty_axes", "outputs"].
+        """
+
+        return self._make_reduce_op("ReduceMin", 18, kwargs, name, shapes, dtypes, op_name_scope)
+
+    def make_reduce_prod(self, kwargs, name=None, shapes=None, dtypes=None, op_name_scope=None):
+        """
+        ReduceProd changes its schema at opset 18: it treats some axes as dynamic input
+        kwargs: key could be ["data", "axes", "keepdims", "noop_with_empty_axes", "outputs"].
+        """
+
+        return self._make_reduce_op("ReduceProd", 18, kwargs, name, shapes, dtypes, op_name_scope)
+
+    def make_reduce_sum(self, kwargs, name=None, shapes=None, dtypes=None, op_name_scope=None):
+        """
+        ReduceSum changes its schema at opset 13: it treats some axes as dynamic input
+        kwargs: key could be ["data", "axes", "keepdims", "noop_with_empty_axes", "outputs"].
+        """
+
+        return self._make_reduce_op("ReduceSum", 13, kwargs, name, shapes, dtypes, op_name_scope)
+
+    def make_reduce_sum_square(self, kwargs, name=None, shapes=None, dtypes=None, op_name_scope=None):
+        """
+        ReduceSumSquare changes its schema at opset 13: it treats some axes as dynamic input
+        kwargs: key could be ["data", "axes", "keepdims", "noop_with_empty_axes", "outputs"].
+        """
+
+        return self._make_reduce_op("ReduceSumSquare", 18, kwargs, name, shapes, dtypes, op_name_scope)
 
     def make_squeeze(self, kwargs, name=None, shapes=None, dtypes=None, return_node=False, op_name_scope=None):
         """

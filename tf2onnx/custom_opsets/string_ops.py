@@ -5,6 +5,7 @@ import io
 import json
 import logging
 import numpy as np
+from onnx.numpy_helper import to_array
 from onnx.onnx_pb import TensorProto
 from onnx.helper import make_attribute
 from tf2onnx import constants, handler
@@ -30,7 +31,7 @@ class StringOps:
             del node.attr[a]
         unsqueeze_node = GraphBuilder(ctx).make_unsqueeze({'data': node.input[1], 'axes': [0]}, return_node=True)
 
-        skip_empty_const = ctx.make_const(utils.make_name('skip_empty_const'), np.array([skip_empty], np.bool))
+        skip_empty_const = ctx.make_const(utils.make_name('skip_empty_const'), np.array([skip_empty], bool))
         ctx.replace_inputs(node, [node.input[0], unsqueeze_node.output[0], skip_empty_const.output[0]])
 
 @tf_op("StringToHashBucketFast", domain=constants.CONTRIB_OPS_DOMAIN)
@@ -53,8 +54,8 @@ class StaticRegexReplace:
         rewrite = node.get_attr_str("rewrite")
         utils.make_sure(node.get_attr_value("replace_global") != 0,
                         "Can not convert StaticRegexReplace if replace_global is False")
-        pattern_node = ctx.make_const(utils.make_name("pattern"), np.array([pattern], np.object))
-        rewrite_node = ctx.make_const(utils.make_name("rewrite"), np.array([rewrite], np.object))
+        pattern_node = ctx.make_const(utils.make_name("pattern"), np.array([pattern], object))
+        rewrite_node = ctx.make_const(utils.make_name("rewrite"), np.array([rewrite], object))
         del node.attr["pattern"]
         del node.attr["rewrite"]
         del node.attr["replace_global"]
@@ -69,7 +70,7 @@ class StringJoin:
         if separator is None:
             separator = b''
         separator = separator.decode('UTF-8')
-        separator_node = ctx.make_const(utils.make_name("separator"), np.array([separator], np.object))
+        separator_node = ctx.make_const(utils.make_name("separator"), np.array([separator], object))
         axis_node = ctx.make_const(utils.make_name("axis"), np.array([0], np.int64))
         inps_with_shapes = [i for i in node.input if ctx.get_shape(i) != []]
         shape_node = None
@@ -85,6 +86,30 @@ class StringJoin:
             unsqueezes.append(unsqueeze_node)
         stack_node = ctx.make_node("Concat", unsqueezes, attr={'axis': 0})
         ctx.replace_inputs(node, [stack_node.output[0], separator_node.output[0], axis_node.output[0]])
+
+@tf_op("ReduceJoin", domain=constants.CONTRIB_OPS_DOMAIN)
+class ReduceJoin:
+    @classmethod
+    def version_1(cls, ctx, node, **kwargs):
+        node.domain = constants.CONTRIB_OPS_DOMAIN
+        node.type = "StringJoin"
+        axis_node = ctx.get_node_by_output(node.input[1])
+        axis = axis_node.get_attr_value('value')
+        utils.make_sure(axis.dims in [[], [1]], "Only a single axis is supported for ReduceJoin node")
+        axis = to_array(axis)
+        new_axis_node = ctx.make_const(utils.make_name("axis"), np.array(axis, np.int64).reshape((1)))
+        separator = node.get_attr_value("separator")
+        if isinstance(separator, bytes):
+            separator = separator.decode()
+        separator_node = ctx.make_const(utils.make_name("separator"), np.array([separator], object))
+        ctx.replace_inputs(node, [node.input[0], separator_node.output[0], new_axis_node.output[0]])
+        keep_dims = node.get_attr_value("keep_dims")
+        if keep_dims:
+            unsqueeze_node = GraphBuilder(ctx).make_unsqueeze(
+                {'data': node.output[0], 'axes': [-1]},
+                name=node.name + '/Unsqueeze'
+                )
+            ctx.insert_node_on_output(ctx.get_node_by_output(unsqueeze_node))
 
 @tf_op(["Equal", "NotEqual"], domain=constants.CONTRIB_OPS_DOMAIN)
 class StringEqual:

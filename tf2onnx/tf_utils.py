@@ -6,7 +6,7 @@ tf2onnx.tf_utils - misc utilities for tf2onnx that interface with tensorflow
 """
 
 import collections
-from distutils.version import LooseVersion
+from packaging.version import Version
 
 import numpy as np
 import tensorflow as tf
@@ -14,8 +14,9 @@ import tensorflow as tf
 from tensorflow.core.framework import types_pb2, tensor_pb2, graph_pb2
 from tensorflow.python.framework import tensor_util
 
-from onnx import helper, onnx_pb, numpy_helper
+from onnx import onnx_pb, numpy_helper
 
+from tf2onnx import utils
 from tf2onnx.utils import make_sure, is_tf_const_op, port_name, map_onnx_to_numpy_type
 from . import logging
 
@@ -50,15 +51,15 @@ TF_TO_ONNX_DTYPE = {
 def tf_to_onnx_tensor(tensor, name=""):
     """Convert tensorflow tensor to onnx tensor."""
     np_data = get_tf_tensor_data(tensor)
-    if np_data.dtype == np.object:
+    if np_data.dtype == object:
         # assume np_data is string, numpy_helper.from_array accepts ndarray,
         # in which each item is of str while the whole dtype is of object.
         try:
             # Faster but fails on Unicode
-            np_data = np_data.astype(np.str).astype(np.object)
+            np_data = np_data.astype(str).astype(object)
         except UnicodeDecodeError:
             decode = np.vectorize(lambda x: x.decode('UTF-8'))
-            np_data = decode(np_data).astype(np.object)
+            np_data = decode(np_data).astype(object)
         except:  # pylint: disable=bare-except
             raise RuntimeError("Not support type: {}".format(type(np_data.flat[0])))
     return numpy_helper.from_array(np_data, name=name)
@@ -121,7 +122,7 @@ def get_tf_node_attr(node, name):
 
 
 def get_tf_version():
-    return LooseVersion(tf.__version__)
+    return Version(tf.__version__)
 
 def compress_graph_def(graph_def):
     """
@@ -210,7 +211,8 @@ def compute_const_folding_using_tf(g, const_node_values, graph_outputs):
             input_names = [i.name for i in node.inputs]
             output_names = [i.name for i in node.outputs]
             if node.type == 'StridedSlice' and input_names[0] in shape_node_outputs \
-                                           and output_names[0] not in outputs_to_values:
+                                           and output_names[0] not in outputs_to_values \
+                                           and output_names[0] not in unneeded_outputs:
                 shape = shape_node_outputs[input_names[0]]
                 i = get_index_from_strided_slice_of_shape(node, outputs_to_values)
                 if i is not None and 0 <= i < len(shape) and shape[i] is not None:
@@ -458,7 +460,7 @@ def tflist_to_onnx(g, shape_override, const_node_values=None, ignore_default=Non
 
         if takeit:
             try:
-                onnx_node = helper.make_node(node_type, input_names, output_names, name=node.name, **attr)
+                onnx_node = utils.make_onnx_node_with_attr(node_type, input_names, output_names, name=node.name, **attr)
                 onnx_nodes.append(onnx_node)
             except Exception as ex:
                 logger.error("pass1 convert failed for %s, ex=%s", node, ex)

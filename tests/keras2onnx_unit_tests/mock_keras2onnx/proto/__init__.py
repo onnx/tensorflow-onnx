@@ -2,7 +2,7 @@
 
 import os
 import tensorflow
-from distutils.version import StrictVersion
+from packaging.version import Version
 
 # Rather than using ONNX protobuf definition throughout our codebase, we import ONNX protobuf definition here so that
 # we can conduct quick fixes by overwriting ONNX functions without changing any lines elsewhere.
@@ -22,11 +22,15 @@ _check_onnx_version()
 
 
 def is_tensorflow_older_than(version_str):
-    return StrictVersion(tensorflow.__version__.split('-')[0]) < StrictVersion(version_str)
+    return Version(tensorflow.__version__.split('-')[0]) < Version(version_str)
 
 
 def is_tensorflow_later_than(version_str):
-    return StrictVersion(tensorflow.__version__.split('-')[0]) > StrictVersion(version_str)
+    return Version(tensorflow.__version__.split('-')[0]) > Version(version_str)
+
+
+def python_keras_is_deprecated():
+    return is_tensorflow_later_than("2.5.0")
 
 
 is_tf_keras = False
@@ -38,7 +42,10 @@ else:
     is_tf_keras = str_tk_keras != '0'
 
 if is_tf_keras:
-    from tensorflow.python import keras
+    if python_keras_is_deprecated():
+        from tensorflow import keras
+    else:
+        from tensorflow.python import keras
 else:
     try:
         import keras
@@ -47,12 +54,20 @@ else:
             is_tf_keras = True
     except ImportError:
         is_tf_keras = True
-        from tensorflow.python import keras
+        if python_keras_is_deprecated():
+            from tensorflow import keras
+        else:
+            from tensorflow.python import keras
+
+
+keras_version = tensorflow.__version__
+if hasattr(keras, '__version__'):
+    keras_version = keras.__version__
 
 
 def is_keras_older_than(version_str):
-    return StrictVersion(keras.__version__.split('-')[0]) < StrictVersion(version_str)
+    return Version(keras_version.split('-')[0]) < Version(version_str)
 
 
 def is_keras_later_than(version_str):
-    return StrictVersion(keras.__version__.split('-')[0]) > StrictVersion(version_str)
+    return Version(keras_version.split('-')[0]) > Version(version_str)

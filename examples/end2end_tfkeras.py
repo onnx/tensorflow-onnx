@@ -41,9 +41,7 @@ print(expected)
 
 ########################################
 # Saves the model.
-if not os.path.exists("simple_rnn"):
-    os.mkdir("simple_rnn")
-tf.keras.models.save_model(model, "simple_rnn")
+model.export("simple_rnn")
 
 ########################################
 # Run the command line.
@@ -57,7 +55,7 @@ print(proc.stderr.decode('ascii'))
 ########################################
 # Runs onnxruntime.
 session = InferenceSession("simple_rnn.onnx")
-got = session.run(None, {'input_1': input})
+got = session.run(None, {'keras_tensor': input})
 print(got[0])
 
 ########################################
@@ -68,5 +66,5 @@ print(np.abs(got[0] - expected).max())
 # Measures processing time.
 print('tf:', timeit.timeit('model.predict(input)',
                            number=100, globals=globals()))
-print('ort:', timeit.timeit("session.run(None, {'input_1': input})",
+print('ort:', timeit.timeit("session.run(None, {'keras_tensor': input})",
                             number=100, globals=globals()))

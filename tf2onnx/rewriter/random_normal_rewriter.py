@@ -33,16 +33,22 @@ def rewrite_random_normal(g, ops):
         match_results = list(matcher.match_ops(ops))
         for match in match_results:
             output = match.get_op('output')
-            if output.type == 'Add':
+            input2 = match.get_op('input2')
+            is_output = False
+            for output_name in g.outputs:
+                # input2 and output can not be output node.
+                if input2.name in output_name or output.name in output_name:
+                    is_output = True
+                    break
+            if is_output:
+                continue
+            if output.type == 'Add' and input2.type == 'Mul':
                 # pattern 1
                 mean = output.inputs[1].get_tensor_value()
+                scale = input2.inputs[1].get_tensor_value()
             else:
                 # pattern 2
                 mean = 0.0
-            input2 = match.get_op('input2')
-            if input2.type == 'Mul':
-                scale = input2.inputs[1].get_tensor_value()
-            else:
                 scale = 1.0
             dtype = g.get_dtype(output.output[0])
             op_name = utils.make_name("RandomNormal")

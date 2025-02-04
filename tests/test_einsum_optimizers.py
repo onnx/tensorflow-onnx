@@ -94,8 +94,9 @@ class EinsumOptimizerTests(Tf2OnnxBackendTestBase):
         new_model_proto = self.run_einsum_compare(["Y"], feed_dict, model_proto,
                                                   catch_errors=catch_errors)
 
-        sess1 = InferenceSession(model_proto.SerializeToString())
-        sess2 = InferenceSession(new_model_proto.SerializeToString())
+        providers = ['CPUExecutionProvider']
+        sess1 = InferenceSession(model_proto.SerializeToString(), providers=providers)
+        sess2 = InferenceSession(new_model_proto.SerializeToString(), providers=providers)
         got1 = sess1.run(None, feed_dict)
         got2 = sess2.run(None, feed_dict)
         assert_almost_equal(got1, got2)

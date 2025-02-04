@@ -3,9 +3,9 @@
 import os
 import tensorflow as _tf
 
-from distutils.version import StrictVersion
+from packaging.version import Version
 
-is_tf2 = StrictVersion(_tf.__version__.split('-')[0]) >= StrictVersion('2.0.0')
+is_tf2 = Version(_tf.__version__.split('-')[0]) >= Version("2.0.0")
 
 
 def normalize_tensor_shape(tensor_shape):

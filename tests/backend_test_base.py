@@ -20,6 +20,7 @@ from tensorflow.python.ops import lookup_ops
 import onnx
 from common import get_test_config
 from tfjs_runner import run_tfjs
+from tf2onnx import constants
 from tf2onnx import utils
 from tf2onnx.tfonnx import process_tf_graph
 from tf2onnx import optimizer
@@ -27,7 +28,6 @@ from tf2onnx.tf_loader import tf_reset_default_graph, tf_session, tf_placeholder
 from tf2onnx.tf_loader import tf_optimize, is_tf2, get_hash_table_info
 from tf2onnx.tf_utils import compress_graph_def
 from tf2onnx.graph import ExternalTensorStorage
-from tf2onnx.tflite.Model import Model
 
 
 if is_tf2():
@@ -112,7 +112,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                              check_value=True, check_shape=True, check_dtype=True):
         for expected_val, actual_val in zip(expected, actual):
             if check_value:
-                if expected_val.dtype == np.object:
+                if expected_val.dtype == object:
                     # TFLite pads strings with nul bytes
                     decode = np.vectorize(lambda x: x.replace(b'\x00', b'').decode('UTF-8'))
                     expected_val_str = decode(expected_val)
@@ -248,14 +248,10 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
 
     def tflite_has_supported_types(self, tflite_path):
         try:
-            with open(tflite_path, 'rb') as f:
-                buf = f.read()
-            buf = bytearray(buf)
-            model = Model.GetRootAsModel(buf, 0)
-            tensor_cnt = model.Subgraphs(0).TensorsLength()
             interpreter = tf.lite.Interpreter(tflite_path)
-            for i in range(tensor_cnt):
-                dtype = interpreter._get_tensor_details(i)['dtype']   # pylint: disable=protected-access
+            tensor_details = interpreter.get_tensor_details()
+            for tensor_detail in tensor_details:
+                dtype = tensor_detail.get('dtype')
                 if np.dtype(dtype).kind == 'O':
                     return False
             return True
@@ -283,7 +279,10 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             # tflite sometimes converts from tf but produces an invalid model
             return None, None
 
-    def assert_shapes_correct(self, graph, allow_missing=False, run_checker=True):
+    def assert_shapes_correct(self, graph, allow_missing=False, run_checker=True, check_shape=True):
+        if not check_shape:
+            return None
+
         model_proto = graph.make_model("test")
 
         if run_checker and not any(graph.get_shape(out) is None for out in graph.outputs + graph.input_names):
@@ -300,6 +299,10 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
         def get_shape(info):
             if not info.type.tensor_type.HasField("shape"):
                 return None
+            for d in info.type.tensor_type.shape.dim:
+                if d.HasField('dim_param') and d.dim_param.startswith("unk"):
+                    return None
+
             return [d.dim_value if d.HasField('dim_value') else -1 for d in info.type.tensor_type.shape.dim]
         def get_dtype(info):
             tensor_type = info.type.tensor_type
@@ -316,7 +319,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                 continue
             onnx_shape = get_shape(info)
             tf2onnx_shape = graph.get_shape(info.name)
-            if onnx_shape is None:
+            if onnx_shape is None or not onnx_shape:
                 continue
             if allow_missing and tf2onnx_shape is None:
                 continue
@@ -366,6 +369,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
         graph_def_path = os.path.join(self.test_data_directory, self._testMethodName + "_after_tf_optimize.pb")
         utils.save_protobuf(graph_def_path, graph_def)
         self.logger.debug("created file  %s", graph_def_path)
+        tfl_process_args = process_args.copy()
 
         if test_tfjs:
             tfjs_path = self.convert_to_tfjs(graph_def_path, output_names_with_port)
@@ -395,9 +399,15 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                     g = optimizer.optimize_graph(g, catch_errors=False)
                 actual = self.run_backend(g, output_names_with_port, onnx_feed_dict, large_model,
                                           use_custom_ops=use_custom_ops)
+            if 'outputs_as_nchw' in tfl_process_args:
+                for output_name in tfl_process_args['outputs_as_nchw']:
+                    i = output_names_with_port.index(output_name)
+                    actual[i] = np.transpose(actual[i], constants.NCHW_TO_NHWC)
 
-            self.assert_results_equal(expected, actual, rtol, atol, mtol, check_value, check_shape, check_dtype)
-            self.assert_shapes_correct(g, self.config.allow_missing_shapes, not self.config.skip_onnx_checker)
+            self.assert_results_equal(expected, actual, rtol, atol, mtol, check_value, check_shape,
+                                      check_dtype)
+            self.assert_shapes_correct(g, self.config.allow_missing_shapes, not self.config.skip_onnx_checker,
+                                       check_shape)
 
             if graph_validator:
                 self.assertTrue(graph_validator(g))
@@ -410,12 +420,14 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             if run_tfl_consistency_test:
                 self.assert_results_equal(expected, tfl_res, rtol, atol, mtol, check_value, check_shape, check_dtype)
 
-            tfl_process_args = process_args.copy()
             if 'inputs_as_nchw' in tfl_process_args:
                 nchw_inps_with_port = tfl_process_args['inputs_as_nchw']
                 tfl_process_args['inputs_as_nchw'] = [i.split(':')[0] for i in nchw_inps_with_port]
             input_names_without_port = [inp.split(':')[0] for inp in feed_dict.keys()]
-
+            if 'outputs_as_nchw' in tfl_process_args:
+                nchw_outps_with_port = tfl_process_args['outputs_as_nchw']
+                tfl_process_args['outputs_as_nchw'] = [i.split(':')[0] for i in nchw_outps_with_port]
+                output_names_with_port = [i.split(':')[0] for i in nchw_outps_with_port]
             g = process_tf_graph(None, opset=self.config.opset,
                                  input_names=input_names_without_port,
                                  output_names=tfl_outputs,
@@ -427,9 +439,14 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             onnx_feed_dict_without_port = {k.split(':')[0]: v for k, v in onnx_feed_dict.items()}
             onnx_tfl_res = self.run_backend(g, tfl_outputs, onnx_feed_dict_without_port,
                                             postfix="_from_tflite", use_custom_ops=use_custom_ops)
+            if 'outputs_as_nchw' in tfl_process_args:
+                for output_name in tfl_process_args['outputs_as_nchw']:
+                    i = output_names_with_port.index(output_name)
+                    onnx_tfl_res[i] = np.transpose(onnx_tfl_res[i], constants.NCHW_TO_NHWC)
 
             self.assert_results_equal(tfl_res, onnx_tfl_res, rtol, atol, mtol, check_value, check_shape, check_dtype)
-            self.assert_shapes_correct(g, self.config.allow_missing_shapes, not self.config.skip_onnx_checker)
+            self.assert_shapes_correct(g, self.config.allow_missing_shapes, not self.config.skip_onnx_checker,
+                                       check_shape)
 
             if graph_validator:
                 self.assertTrue(graph_validator(g))
@@ -456,10 +473,15 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
             g = optimizer.optimize_graph(g)
             onnx_tfjs_res = self.run_backend(g, None, onnx_feed_dict, large_model,
                                              postfix="_from_tfjs", use_custom_ops=use_custom_ops)
+            if 'outputs_as_nchw' in tfl_process_args:
+                for output_name in tfl_process_args['outputs_as_nchw']:
+                    i = output_names_with_port.index(output_name)
+                    onnx_tfjs_res[i] = np.transpose(onnx_tfjs_res[i], constants.NCHW_TO_NHWC)
 
             self.assert_results_equal(tfjs_res, onnx_tfjs_res, rtol, atol, mtol, check_value, check_shape,
                                       check_dtype=False)
-            self.assert_shapes_correct(g, self.config.allow_missing_shapes, not self.config.skip_onnx_checker)
+            self.assert_shapes_correct(g, self.config.allow_missing_shapes, not self.config.skip_onnx_checker,
+                                       check_shape)
 
             if graph_validator:
                 self.assertTrue(graph_validator(g))

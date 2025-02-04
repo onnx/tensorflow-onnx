@@ -2,17 +2,21 @@
 
 import pytest
 import numpy as np
-from tf2onnx.keras2onnx_api import get_maximum_opset_supported
 from mock_keras2onnx.proto.tfcompat import is_tf2, tensorflow as tf
 from mock_keras2onnx.proto import (keras, is_tf_keras,
                                    is_tensorflow_older_than, is_tensorflow_later_than,
-                                   is_keras_older_than, is_keras_later_than)
-from test_utils import no_loops_in_tf2, all_recurrents_should_bidirectional
+                                   is_keras_older_than, is_keras_later_than, python_keras_is_deprecated)
+from test_utils import no_loops_in_tf2, all_recurrents_should_bidirectional, convert_keras_for_test as convert_keras, get_max_opset_supported_for_test as get_maximum_opset_supported
 
 K = keras.backend
 Activation = keras.layers.Activation
 Add = keras.layers.Add
-advanced_activations = keras.layers.advanced_activations
+if python_keras_is_deprecated():
+    advanced_activations = keras.layers
+    layers_core = keras.layers
+else:
+    advanced_activations = keras.layers.advanced_activations
+    layers_core = keras.layers.core
 AlphaDropout = keras.layers.AlphaDropout
 Average = keras.layers.Average
 AveragePooling1D = keras.layers.AveragePooling1D
@@ -72,7 +76,7 @@ GRU_CLASSES = [(GRU, "v1")]
 LSTM_CLASSES = [(LSTM, LSTMCell, "v1")]
 RNN_CLASSES = [SimpleRNN, GRU, LSTM]
 
-if is_tf_keras and is_tensorflow_later_than("1.14.0"):
+if is_tf_keras and is_tensorflow_later_than("1.14.0") and not python_keras_is_deprecated():
     # Add the TF v2 compatability layers (available after TF 1.14)
     from tensorflow.python.keras.layers import recurrent_v2
     GRU_CLASSES.append((recurrent_v2.GRU, "v2"))
@@ -83,9 +87,6 @@ if is_tf_keras and is_tensorflow_later_than("1.14.0"):
 def _asarray(*a):
     return np.array([a], dtype='f')
 
-########################
-from tf2onnx.keras2onnx_api import convert_keras
-##########################
 
 def test_keras_lambda(runner):
     model = Sequential()
@@ -1138,8 +1139,8 @@ def test_conv1d_padding(conv1_runner):
     test_causal = False
     if is_tf_keras:
         import tensorflow
-        from distutils.version import StrictVersion
-        if StrictVersion(tensorflow.__version__.split('-')[0]) >= StrictVersion('1.12.0'):
+        from packaging.version import Version
+        if Version(tensorflow.__version__.split('-')[0]) >= Version('1.12.0'):
             test_causal = True
     else:
         test_causal = True
@@ -1259,7 +1260,7 @@ def test_conv3d_transpose(conv3trans_runner):
 
 def test_flatten(runner):
     model = keras.Sequential()
-    model.add(keras.layers.core.Flatten(input_shape=(3, 2)))
+    model.add(layers_core.Flatten(input_shape=(3, 2)))
     model.add(Dense(3))
     onnx_model = convert_keras(model, model.name)
 
@@ -1303,7 +1304,7 @@ def test_flatten2(runner):
 
 def test_reshape(runner):
     model = keras.Sequential()
-    model.add(keras.layers.core.Reshape((2, 3), input_shape=(3, 2)))
+    model.add(layers_core.Reshape((2, 3), input_shape=(3, 2)))
     onnx_model = convert_keras(model, model.name)
 
     data = np.array([[[1, 2], [3, 4], [5, 6]]]).astype(np.float32)
@@ -1314,7 +1315,7 @@ def test_reshape(runner):
 
 def test_permute(runner):
     model = keras.Sequential()
-    model.add(keras.layers.core.Permute((2, 1), input_shape=(3, 2)))
+    model.add(layers_core.Permute((2, 1), input_shape=(3, 2)))
     onnx_model = convert_keras(model, model.name)
 
     data = np.array([[[1, 2], [3, 4], [5, 6]]]).astype(np.float32)
@@ -1325,7 +1326,7 @@ def test_permute(runner):
 
 def test_repeat_vector(runner):
     model = keras.Sequential()
-    model.add(keras.layers.core.RepeatVector(3, input_shape=(4,)))
+    model.add(layers_core.RepeatVector(3, input_shape=(4,)))
     onnx_model = convert_keras(model, model.name)
 
     data = _asarray(1, 2, 3, 4)
@@ -1596,11 +1597,11 @@ def test_crop(misc_conv_runner):
             misc_conv_runner(layer, ishape, opset_)
 
         for data_format_ in ['channels_last', 'channels_first']:
-            ishape = (20, 20, 1)
+            ishape = (20, 20, 10)
             for crop_v in [2, (2, 2), ((1, 2), (2, 3))]:
                 layer = Cropping2D(cropping=crop_v, data_format=data_format_)
                 misc_conv_runner(layer, ishape, opset_)
-            ishape = (20, 20, 20, 1)
+            ishape = (20, 20, 20, 10)
             for crop_v in [2, (2, 3, 4), ((1, 2), (2, 3), (3, 5))]:
                 layer = Cropping3D(cropping=crop_v, data_format=data_format_)
                 misc_conv_runner(layer, ishape, opset_)

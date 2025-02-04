@@ -10,7 +10,7 @@ from tensorflow.python.ops import init_ops
 from tensorflow.python.ops import variable_scope
 from backend_test_base import Tf2OnnxBackendTestBase
 from common import check_tf_min_version, unittest_main, check_opset_after_tf_version, \
-    skip_tf2, skip_tf_versions, check_op_count
+    skip_tf2, skip_tf_versions, check_op_count, skip_tfjs
 
 from tf2onnx.tf_loader import is_tf2
 
@@ -51,6 +51,7 @@ class LSTMTests(Tf2OnnxBackendTestBase):
                 # Skip checks for tflite graphs (no ":" in outputs)
                 return good
             good = good and check_op_count(g, "LSTM", require_lstm_count, disabled=False)
+            # If LSTM op rewriter failed to work, Loop op will be shown in general.
             good = good and check_op_count(g, "Loop", 0, disabled=False)
             return good
         try:
@@ -751,6 +752,70 @@ class LSTMTests(Tf2OnnxBackendTestBase):
             return tf.identity(y[0], name="output"), tf.identity(y[1], name="output1")
         self.run_test_case(func, {"input:0": x_val}, [], ["output:0", "output1:0"], rtol=1e-05, atol=1e-06)
 
+    @check_tf_min_version("2.0")
+    @skip_tf_versions("2.1", "Bug in TF 2.1")
+    def test_keras_lstm_recurrent_activation_is_hard_sigmoid(self):
+        in_shape = [10, 3]
+        x_val = np.random.uniform(size=[2, 10, 3]).astype(np.float32)
+
+        model_in = tf.keras.layers.Input(tuple(in_shape), batch_size=2)
+        x = tf.keras.layers.LSTM(
+            units=5,
+            return_sequences=True,
+            return_state=True,
+            kernel_initializer=tf.random_uniform_initializer(0.0, 1.0, seed=42),
+            recurrent_initializer=tf.random_uniform_initializer(0.0, 1.0, seed=44),
+            bias_initializer=tf.random_uniform_initializer(0.0, 1.0, seed=43),
+            recurrent_activation="hard_sigmoid"
+        )(model_in)
+        model = tf.keras.models.Model(inputs=model_in, outputs=x)
+
+        def func(x):
+            y = model(x)
+            return tf.identity(y[0], name="output"), tf.identity(y[1], name="output1")
+        self.run_test_case(func, {"input:0": x_val}, [], ["output:0", "output1:0"], rtol=1e-05, atol=1e-06)
+
+    @check_tf_min_version("2.0")
+    def test_keras_bilstm_recurrent_activation_is_hard_sigmoid(self):
+        in_shape = [10, 3]
+        x_val = np.random.uniform(size=[2, 10, 3]).astype(np.float32)
+
+        model_in = tf.keras.layers.Input(tuple(in_shape), batch_size=2)
+        x = tf.keras.layers.Bidirectional(
+            tf.keras.layers.LSTM(
+                units=5,
+                return_sequences=True,
+                return_state=True,
+                kernel_initializer=tf.random_uniform_initializer(0.0, 1.0, seed=42),
+                recurrent_initializer=tf.random_uniform_initializer(0.0, 1.0, seed=44),
+                bias_initializer=tf.random_uniform_initializer(0.0, 1.0, seed=43),
+                recurrent_activation="hard_sigmoid",
+            )
+        )(model_in)
+        model = tf.keras.models.Model(inputs=model_in, outputs=x)
+
+        def func(x):
+            y = model(x)
+            return tf.identity(y[0], name="output"), tf.identity(y[1], name="output1")
+        self.run_test_case(func, {"input:0": x_val}, [], ["output:0", "output1:0"], rtol=1e-05, atol=1e-06)
+
+    @check_tf_min_version("2.0")
+    @skip_tfjs("TFJS converts model incorrectly")
+    def test_keras_lstm_sigmoid_dropout(self):
+        in_shape = [16, 16]
+        batch_size = 2
+        x_val = np.random.uniform(size=[batch_size] + in_shape).astype(np.float32)
+
+        model = tf.keras.models.Sequential()
+        model_in = tf.keras.layers.Input(shape=tuple(in_shape), name="input")
+        lstm = tf.keras.layers.LSTM(16, activation='sigmoid', dropout=0.1)
+        model.add(model_in)
+        model.add(lstm)
+
+        def func(x):
+            y = model(x)
+            return tf.identity(y[0], name="output")
+        self.run_test_case(func, {"input:0": x_val}, [], ["output:0"], rtol=1e-05, atol=1e-06)
 
 if __name__ == '__main__':
     unittest_main()

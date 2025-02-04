@@ -92,7 +92,7 @@ class LSTMBlockCell:
         w_last_dim = int(w_shape[1] / 4)
         split_output_node = ctx.make_node(
             "Split", [merged_output_node.output[0]],
-            attr={"axis": 1},
+            attr={"axis": 1, 'num_outputs': 4},
             output_count=4
         )
         i, ci, f, o = split_output_node.output

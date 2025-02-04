@@ -22,4 +22,5 @@ class TensorType(object):
     VARIANT = 14
     UINT32 = 15
     UINT16 = 16
+    INT4 = 17
 

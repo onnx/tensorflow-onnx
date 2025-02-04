@@ -54,11 +54,19 @@ def process_bilstm(g, bi_lstms):
         if len(lstm_fw.inputs) > 4:
             lstm_inputs.extend([lstm_fw.input[4], h_node.output[0], c_node.output[0]])
 
-        attr = {"direction": "bidirectional"}
+        direction = "bidirectional"
+        attr = {"direction": direction}
         for name in rnn_utils.onnx_rnn_attr_mapping[rnn_utils.ONNX_RNN_TYPE.LSTM]:
             attr_val = lstm_fw.get_attr_value(name)
             if attr_val:
                 attr[name] = attr_val
+        # activation has to be took care, attr here is proto
+        activations = [act.decode("utf-8")
+                       for act in lstm_fw.get_attr_value("activations", [])]
+        activations += [act.decode("utf-8")
+                        for act in lstm_bw.get_attr_value("activations", [])]
+        if activations:
+            attr["activations"] = activations
 
         bi_lstm_node = g.make_node("LSTM", lstm_inputs, attr=attr, output_count=3)
         all_nodes.append(bi_lstm_node)

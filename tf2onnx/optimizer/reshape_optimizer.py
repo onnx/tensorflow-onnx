@@ -54,7 +54,7 @@ class ReshapeOptimizer(GraphOptimizerBase):
                         symbolic_shape.append(SymbolicTensorElement.from_variable(i))
                     else:
                         symbolic_shape.append(SymbolicTensorElement.from_const(d))
-                feed_dict[n.output[0]] = np.array(symbolic_shape, np.object)
+                feed_dict[n.output[0]] = np.array(symbolic_shape, object)
         try:
             symbolic_res = SymbolicExecutor(graph).compute_outputs([node.input[1]], feed_dict)
         except SymbolicExecutionException:

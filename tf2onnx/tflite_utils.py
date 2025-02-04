@@ -156,9 +156,9 @@ def graphs_from_tflite(tflite_path, input_names=None, output_names=None):
         if is_main_g:
             # Override IO in main graph
             utils.check_io(input_names, output_names, output_shapes.keys())
-            if input_names is not None:
+            if input_names:
                 g_inputs = input_names
-            if output_names is not None:
+            if output_names:
                 g_outputs = output_names
         g = Graph(onnx_nodes, output_shapes, dtypes, input_names=g_inputs, output_names=g_outputs,
                   is_subgraph=not is_main_g, graph_name=graph_name)
@@ -196,14 +196,14 @@ def read_tflite_model(tflite_path):
     try:
         interpreter = tf.lite.Interpreter(tflite_path)
         interpreter.allocate_tensors()
-        tensor_cnt = model.Subgraphs(0).TensorsLength()
-        for i in range(tensor_cnt):
-            name = model.Subgraphs(0).Tensors(i).Name().decode()
-            details = interpreter._get_tensor_details(i)   # pylint: disable=protected-access
-            if "shape_signature" in details:
-                tensor_shapes[name] = details["shape_signature"].tolist()
-            elif "shape" in details:
-                tensor_shapes[name] = details["shape"].tolist()
+        tensor_details = interpreter.get_tensor_details()
+
+        for tensor_detail in tensor_details:
+            name = tensor_detail.get('name')
+            if "shape_signature" in tensor_detail:
+                tensor_shapes[name] = tensor_detail["shape_signature"].tolist()
+            elif "shape" in tensor_detail:
+                tensor_shapes[name] = tensor_detail["shape"].tolist()
     except Exception as e:    # pylint: disable=broad-except
         logger.warning("Error loading model into tflite interpreter: %s", e)
     tflite_graphs = get_model_subgraphs(model)
@@ -271,7 +271,7 @@ def parse_tflite_string_tensor(buffer_bytes, shape):
     string_list = []
     for i in range(count):
         string_list.append(buffer_bytes[offset_list[i]:offset_list[i+1]].decode("utf-8"))
-    return numpy_helper.from_array(np.array(string_list, dtype=np.object).reshape(shape))
+    return numpy_helper.from_array(np.array(string_list, dtype=object).reshape(shape))
 
 
 def op_has_scalar_output(input_shapes, optype, attr):
@@ -482,7 +482,9 @@ def parse_tflite_graph(tflite_g, opcodes_map, model, input_prefix='', tensor_sha
                         output_shapes[out] = None
         if has_prequantized_output:
             output_names = [get_prequant(out) for out in output_names]
-        onnx_node = helper.make_node(optype, input_names, output_names, name=output_names[0], **attr)
+        onnx_node = utils.make_onnx_node_with_attr(optype, input_names, output_names, name=output_names[0], **attr)
+        node_name = output_names[0] if output_names else utils.make_name(f"{optype}_Output")
+        onnx_node = utils.make_onnx_node_with_attr(optype, input_names, output_names, name=node_name, **attr)
         onnx_nodes.append(onnx_node)
 
     inputs = [tensor_names[tflite_g.Inputs(i)] for i in range(tflite_g.InputsLength())]

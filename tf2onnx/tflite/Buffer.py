@@ -57,7 +57,21 @@ class Buffer(object):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(4))
         return o == 0
 
-def Start(builder): builder.StartObject(1)
+    # Buffer
+    def Offset(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(6))
+        if o != 0:
+            return self._tab.Get(flatbuffers.number_types.Uint64Flags, o + self._tab.Pos)
+        return 0
+
+    # Buffer
+    def Size(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(8))
+        if o != 0:
+            return self._tab.Get(flatbuffers.number_types.Uint64Flags, o + self._tab.Pos)
+        return 0
+
+def Start(builder): builder.StartObject(3)
 def BufferStart(builder):
     """This method is deprecated. Please switch to Start."""
     return Start(builder)
@@ -69,6 +83,14 @@ def StartDataVector(builder, numElems): return builder.StartVector(1, numElems, 
 def BufferStartDataVector(builder, numElems):
     """This method is deprecated. Please switch to Start."""
     return StartDataVector(builder, numElems)
+def AddOffset(builder, offset): builder.PrependUint64Slot(1, offset, 0)
+def BufferAddOffset(builder, offset):
+    """This method is deprecated. Please switch to AddOffset."""
+    return AddOffset(builder, offset)
+def AddSize(builder, size): builder.PrependUint64Slot(2, size, 0)
+def BufferAddSize(builder, size):
+    """This method is deprecated. Please switch to AddSize."""
+    return AddSize(builder, size)
 def End(builder): return builder.EndObject()
 def BufferEnd(builder):
     """This method is deprecated. Please switch to End."""

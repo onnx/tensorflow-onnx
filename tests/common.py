@@ -9,8 +9,9 @@ import sys
 import unittest
 from collections import defaultdict
 
-from distutils.version import LooseVersion
+from packaging.version import Version
 from parameterized import parameterized
+import timeout_decorator
 import numpy as np
 import tensorflow as tf
 
@@ -50,6 +51,8 @@ __all__ = [
     "check_op_count",
     "check_gru_count",
     "check_lstm_count",
+    "check_quantization_axis",
+    "timeout",
 ]
 
 
@@ -77,6 +80,10 @@ class TestConfig(object):
         return self.platform == "darwin"
 
     @property
+    def is_windows(self):
+        return self.platform.startswith("win")
+
+    @property
     def is_onnxruntime_backend(self):
         return self.backend == "onnxruntime"
 
@@ -98,7 +105,7 @@ class TestConfig(object):
             pass
 
         if version:
-            version = LooseVersion(version)
+            version = Version(version)
         return version
 
     def __str__(self):
@@ -178,7 +185,7 @@ def check_opset_after_tf_version(tf_version, required_opset, message=""):
     """ Skip if tf_version > max_required_version """
     config = get_test_config()
     reason = _append_message("conversion requires opset {} after tf {}".format(required_opset, tf_version), message)
-    skip = config.tf_version >= LooseVersion(tf_version) and config.opset < required_opset
+    skip = config.tf_version >= Version(tf_version) and config.opset < required_opset
     return unittest.skipIf(skip, reason)
 
 
@@ -284,7 +291,7 @@ def check_tfjs_max_version(max_accepted_version, message=""):
     except ModuleNotFoundError:
         can_import = False
     return unittest.skipIf(can_import and not config.skip_tfjs_tests and \
-         tensorflowjs.__version__ > LooseVersion(max_accepted_version), reason)
+         Version(tensorflowjs.__version__) > Version(max_accepted_version), reason)
 
 def check_tfjs_min_version(min_required_version, message=""):
     """ Skip if tjs_version < min_required_version """
@@ -296,20 +303,20 @@ def check_tfjs_min_version(min_required_version, message=""):
     except ModuleNotFoundError:
         can_import = False
     return unittest.skipIf(can_import and not config.skip_tfjs_tests and \
-         tensorflowjs.__version__ < LooseVersion(min_required_version), reason)
+         Version(tensorflowjs.__version__) < Version(min_required_version), reason)
 
 def check_tf_max_version(max_accepted_version, message=""):
     """ Skip if tf_version > max_required_version """
     config = get_test_config()
     reason = _append_message("conversion requires tf <= {}".format(max_accepted_version), message)
-    return unittest.skipIf(config.tf_version > LooseVersion(max_accepted_version), reason)
+    return unittest.skipIf(config.tf_version > Version(max_accepted_version), reason)
 
 
 def check_tf_min_version(min_required_version, message=""):
     """ Skip if tf_version < min_required_version """
     config = get_test_config()
     reason = _append_message("conversion requires tf >= {}".format(min_required_version), message)
-    return unittest.skipIf(config.tf_version < LooseVersion(min_required_version), reason)
+    return unittest.skipIf(config.tf_version < Version(min_required_version), reason)
 
 
 def skip_tf_versions(excluded_versions, message=""):
@@ -385,7 +392,7 @@ def check_onnxruntime_min_version(min_required_version, message=""):
     config = get_test_config()
     reason = _append_message("conversion requires onnxruntime >= {}".format(min_required_version), message)
     return unittest.skipIf(config.is_onnxruntime_backend and
-                           config.backend_version < LooseVersion(min_required_version), reason)
+                           config.backend_version < Version(min_required_version), reason)
 
 
 def skip_caffe2_backend(message=""):
@@ -454,7 +461,7 @@ def group_nodes_by_type(graph):
 
 
 def check_op_count(graph, op_type, expected_count, disabled=True):
-    # FIXME: after switching to grappler some of the op counts are off. Fix later.
+    # The grappler optimization may change some of the op counts.
     return disabled or len(group_nodes_by_type(graph)[op_type]) == expected_count
 
 
@@ -465,6 +472,8 @@ def check_lstm_count(graph, expected_count):
 def check_gru_count(graph, expected_count):
     return check_op_count(graph, "GRU", expected_count)
 
+def check_quantization_axis(graph, op_type, expected_axis):
+    return np.all(np.array([n.get_attr_int("axis") for n in group_nodes_by_type(graph)[op_type]]) == expected_axis)
 
 _MAX_MS_OPSET_VERSION = 1
 
@@ -493,3 +502,14 @@ def check_node_domain(node, domain):
     if not domain:
         return not node.domain
     return node.domain == domain
+
+def timeout(seconds):
+    """
+    Decorator for enforcing a time limit on a test.
+
+    NOTE: Please only use for ensuring that a test does not time out.
+    Do not write tests that intentionally time out.
+    """
+    if get_test_config().is_windows:
+        return unittest.skip("timeout testing is unreliable on Windows.")
+    return timeout_decorator.timeout(seconds)

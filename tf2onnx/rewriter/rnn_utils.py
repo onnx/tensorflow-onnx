@@ -30,6 +30,25 @@ class REWRITER_RESULT(Enum):
 
 # TensorFlow LSTMCell/BasicLSTMCell and Keras LSTM computation graph matching
 
+def insert_activation(activation, name="", inputs=None):
+    inputs = inputs if inputs else [] # to avoid empty list as default arg
+    if activation == "hard_sigmoid":
+        return OpTypePattern("Maximum", inputs=[
+            OpTypePattern("Minimum", inputs=[
+                OpTypePattern("Add|AddV2", inputs=[
+                    OpTypePattern("Mul", inputs=[
+                        *inputs,
+                        OpTypePattern("*") # mul(x, 0.2)
+                    ]), OpTypePattern("*") # add(x, 0.5)
+                ]), OpTypePattern("*") # minimum(x, 1)
+            ]), OpTypePattern("*") # maximum(x, 0)
+        ])
+    # Additional activation pattern can be added when needed:
+    # https://www.tensorflow.org/api_docs/python/tf/keras/activations
+    # otherwise, use default activations
+    return OpTypePattern("Tanh|Relu|Sigmoid", name=name, inputs=inputs)
+
+
 def make_lstm_xc_pattern(enter_or_id="Enter", from_keras=False, use_bias=False):
     if from_keras:
         lstm_xh_pattern = OpTypePattern("Add|AddV2", allow_reorder=False, inputs=[
@@ -63,7 +82,8 @@ def make_lstm_xc_pattern(enter_or_id="Enter", from_keras=False, use_bias=False):
     ])
 
 
-def make_lstm_pattern(enter_or_id="Enter", from_keras=False, use_bias=False):
+def make_lstm_pattern(enter_or_id="Enter", from_keras=False, use_bias=False,
+                      activation="", recurrent_activation=""):
     # split (Xt*(W[ifco]^T) + Ht-1*(R[ifco]^T)) on 'Const' axis
     lstm_xc_pattern = OpTypePattern('Split', inputs=[
         OpTypePattern("Const"),
@@ -77,23 +97,21 @@ def make_lstm_pattern(enter_or_id="Enter", from_keras=False, use_bias=False):
             OpTypePattern("*", name="ft_bias"),
         ])
 
-    activation = "Tanh|Relu|Sigmoid"
-    recurrent_activation = "Tanh|Relu|Sigmoid"
-
-    return OpTypePattern("Mul", name='ht', inputs=[
-        OpTypePattern(recurrent_activation, name="ot", inputs=[lstm_xc_pattern]),
-        OpTypePattern(activation, name="ct'", inputs=[
-            OpTypePattern("Add|AddV2", name="ct", inputs=[
-                OpTypePattern("Mul", name="ct_identity_consumer", inputs=[
-                    OpTypePattern(recurrent_activation, name="ft", inputs=[lstm_fb_pattern]),
-                    OpTypePattern("*", name="c"),
-                ]),
-                OpTypePattern("Mul", inputs=[
-                    OpTypePattern(recurrent_activation, name="it", inputs=[lstm_xc_pattern]),
-                    OpTypePattern(activation, name="gt", inputs=[lstm_xc_pattern]),
-                ]),
-            ]),
+    # cell state
+    lstm_ct_pattern = OpTypePattern("Add|AddV2", name="ct", inputs=[
+        OpTypePattern("Mul", name="ct_identity_consumer", inputs=[
+            insert_activation(recurrent_activation, name="ft", inputs=[lstm_fb_pattern]),
+            OpTypePattern("*", name="c"),
         ]),
+        OpTypePattern("Mul", inputs=[
+            insert_activation(recurrent_activation, name="it", inputs=[lstm_xc_pattern]),
+            insert_activation(activation, name="gt", inputs=[lstm_xc_pattern]),
+        ]),
+    ])
+
+    return OpTypePattern("Mul", name="ht", inputs=[
+        insert_activation(recurrent_activation, name="ot", inputs=[lstm_xc_pattern]),
+        insert_activation(activation, name="ct'", inputs=[lstm_ct_pattern]),
     ])
 
 lstmcell_pattern = make_lstm_pattern()

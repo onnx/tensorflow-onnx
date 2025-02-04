@@ -12,6 +12,8 @@ from onnx import onnx_pb
 from tf2onnx import constants, utils
 from tf2onnx.handler import tf_op
 from tf2onnx.onnx_opset import common
+from tf2onnx.graph_builder import GraphBuilder
+
 
 logger = logging.getLogger(__name__)
 
@@ -363,13 +365,13 @@ class LRN:
                                       name=op_name, shapes=shapes, dtypes=dtypes)
 
 
-@tf_op(["MatMul", "BatchMatMul", "BatchMatMulV2"])
+@tf_op(["MatMul", "BatchMatMul", "BatchMatMulV2", "BatchMatMulV3"])
 class MatMul:
     @classmethod
     def version_1(cls, ctx, node, **kwargs):
         # tensorflow allows transpose and conjugated. If found, insert the required transpose.
         # We could use Gemm as well but tensorflow does not pass bias in matmul.
-        node.type = "MatMul"
+        if node.type != "MatMulInteger": node.type = "MatMul"
 
         attrs = ["transpose_a", "transpose_b", "adjoint_a", "adjoint_b", "adj_x", "adj_y"]
         attrs_val = [node.get_attr(attr) for attr in attrs]
@@ -408,7 +410,19 @@ class MatMul:
             val = node.get_attr(i)
             if val is not None and val.i != 0:
                 raise ValueError(node.type + " attribute " + i + " is not supported")
-
+    @classmethod
+    def version_10(cls, ctx, node, **kwargs):
+        if (ctx.get_dtype(node.input[0]) in [onnx_pb.TensorProto.INT8, onnx_pb.TensorProto.UINT8] and
+                ctx.get_dtype(node.input[1]) in [onnx_pb.TensorProto.INT8, onnx_pb.TensorProto.UINT8] and
+                ctx.get_dtype(node.output[0]) == onnx_pb.TensorProto.INT32):
+            node.type = "MatMulInteger"
+            zpdata_a = np.zeros(1, dtype=utils.map_onnx_to_numpy_type(ctx.get_dtype(node.input[0])))
+            zero_point_node_a = ctx.make_const(utils.make_name("zero_point_a"), zpdata_a)
+            zpdata_b = np.zeros(1, dtype=utils.map_onnx_to_numpy_type(ctx.get_dtype(node.input[1])))
+            zero_point_node_b = ctx.make_const(utils.make_name("zero_point_b"), zpdata_b)
+            ctx.replace_inputs(node, [node.input[0], node.input[1],
+                                      zero_point_node_a.output[0], zero_point_node_b.output[0]])
+        cls.version_1(ctx, node, **kwargs)
 
 @tf_op("Erf")
 class Erf:
@@ -543,6 +557,207 @@ class CumSum:
         pass
 
 
+@tf_op("Cumprod")
+class CumProd:
+    @classmethod
+    def version_10(cls, ctx, node, **kwargs):
+        # opset 10 required for Slice to support starts/ends/axes/steps as inputs
+        axis_node = node.inputs[1]
+        is_axis_const = axis_node.is_const()
+        if is_axis_const: # we can compute axis value right now
+            axis = axis_node.get_tensor_value()
+            axis_node = ctx.make_const(utils.make_name("axis"), np.array([axis], dtype=np.int64))
+        else:
+            axis_node = ctx.make_node("Cast", inputs=[axis_node.output[0]], attr={"to": onnx_pb.TensorProto.INT64},
+                                      op_name_scope=node.name, outputs=[utils.make_name("axis")])
+            axis_node = GraphBuilder(ctx).make_unsqueeze({'data': axis_node.output[0], 'axes': [0]}, return_node=True)
+            axis = axis_node.output[0]
+
+        input_rank = len(ctx.get_shape(node.input[0]))
+        cond_true_node = ctx.make_const(utils.make_name("cond_in"), np.ones((), dtype=bool))
+        input_shape_node = ctx.make_node("Shape", inputs=[node.input[0]], op_name_scope=node.name,
+                                         outputs=[utils.make_name("input_shape")])
+        axis_length_node = ctx.make_node("Gather", inputs=[input_shape_node.output[0], node.input[1]],
+                                         op_name_scope=node.name, outputs=[utils.make_name("axis_length")])
+        one_node = ctx.make_const(utils.make_name("one"), np.array([1], "int64"))
+        axis_length_plus_one_node = ctx.make_node("Add", inputs=[axis_length_node.output[0], one_node.output[0]],
+                                                  op_name_scope=node.name,
+                                                  outputs=[utils.make_name("axis_length_plus_one")])
+        num_iter_node = ctx.make_node("Sub", inputs=[axis_length_node.output[0], one_node.output[0]],
+                                      op_name_scope=node.name, outputs=[utils.make_name("num_iter")])
+
+        if node.get_attr_value("exclusive"): # one iter less, crop the input, then pad the output
+            num_iter_node = ctx.make_node("Sub", inputs=[num_iter_node.output[0], one_node.output[0]],
+                                          op_name_scope=node.name, outputs=[utils.make_name("num_iter")])
+            zero_node = ctx.make_const(utils.make_name("zero"), np.array([0], "int64"))
+            if node.get_attr_value("reverse"):
+                pad_axis = [0, 1]
+                start_slice = one_node.output[0]
+                end_slice = axis_length_plus_one_node.output[0]
+            else:
+                minus_one_node = ctx.make_const(utils.make_name("minus_one"), np.array([-1], "int64"))
+                pad_axis = [1, 0]
+                start_slice = zero_node.output[0]
+                end_slice = minus_one_node.output[0]
+            pads_node = cls.get_pads_node(ctx, pad_axis, axis, input_rank, node.name)
+            slice_shape = [-1] * len(ctx.get_shape(node.input[0]))
+            inputs_node = ctx.make_node("Slice", inputs=[node.input[0], start_slice, end_slice, axis_node.output[0]],
+                                        op_name_scope=node.name, outputs=[utils.make_name("slice")],
+                                        shapes=[slice_shape], dtypes=[ctx.get_dtype(node.input[0])])
+            inputs = inputs_node.output[0]
+        else:
+            inputs = node.input[0]
+
+        loop_graph = cls.make_loop_graph(ctx, node, inputs, input_rank, axis)
+        loop_graph.parent_graph = ctx
+
+        loop_inputs = [num_iter_node.output[0], cond_true_node.output[0], inputs,
+                       axis_length_plus_one_node.output[0], inputs]
+        loop_outputs = [utils.make_name("loop_inputs_out"), utils.make_name("loop_axis_length_plus_one_out"),
+                        utils.make_name("loop_accumulator_out")]
+        if not is_axis_const: # axis is a tensor, we neeed to feed it to the loop graph
+            loop_inputs.append(axis)
+            loop_outputs.append(utils.make_name("loop_axis_out"))
+        loop_outputs_shapes = [loop_graph.get_shape(o) for o in loop_graph.outputs[1:]]
+        loop_outputs_dtypes = [loop_graph.get_dtype(o) for o in loop_graph.outputs[1:]]
+
+        loop_node = ctx.make_node("Loop", inputs=loop_inputs, branches={"body": loop_graph}, outputs=loop_outputs,
+                                  shapes=loop_outputs_shapes, dtypes=loop_outputs_dtypes, op_name_scope=node.name)
+
+        if node.get_attr_value("exclusive"): # pad the output
+            if ctx.get_dtype(loop_node.output[2]) != ctx.get_dtype(one_node.output[0]):
+                pad_const_node = ctx.make_node("Cast", inputs=[one_node.output[0]],
+                                               attr={"to": ctx.get_dtype(loop_node.output[2])},
+                                               op_name_scope=node.name, outputs=[utils.make_name("pad_const")])
+            else:
+                pad_const_node = one_node
+            output_node = ctx.make_node("Pad", op_name_scope=node.name, outputs=[utils.make_name("cumprod_out")],
+                                        inputs=[loop_node.output[2], pads_node.output[0], pad_const_node.output[0]])
+            output = output_node.output[0]
+        else:
+            output = loop_node.output[2]
+        output_node = ctx.make_node("Identity", inputs=[output], outputs=[utils.make_name("cumprod_out")],
+                                    shapes=[ctx.get_shape(node.input[0])], dtypes=[ctx.get_dtype(node.input[0])])
+        ctx.insert_node_on_output(output_node, node.output[0])
+        ctx.remove_node(node.name)
+
+    @classmethod
+    def make_loop_graph(cls, ctx, node, inputs_tensor, input_rank, axis):
+        inputs_tensor_shape = ctx.get_shape(inputs_tensor)
+        inputs_tensor_dtype = ctx.get_dtype(inputs_tensor)
+
+        graph = ctx.create_new_graph_with_same_config()
+        graph.add_graph_input(utils.make_name("iteration_num"), onnx_pb.TensorProto.INT64, [])
+        graph.add_graph_input(utils.make_name("condition_in"), onnx_pb.TensorProto.BOOL, [])
+        graph.add_graph_input(utils.make_name("inputs"), inputs_tensor_dtype, inputs_tensor_shape)
+        graph.add_graph_input(utils.make_name("axis_length_plus_one"), onnx_pb.TensorProto.INT64, [1])
+        graph.add_graph_input(utils.make_name("accumulator"), inputs_tensor_dtype, inputs_tensor_shape)
+        if not isinstance(axis, int): # axis is a tensor, we need to feed it to the loop graph
+            graph.add_graph_input(utils.make_name("axis"), onnx_pb.TensorProto.INT64, [1])
+            axis = graph.input_names[-1]
+            axis_node = graph.get_node_by_output(axis)
+        else:
+            axis_node = graph.make_const(utils.make_name("axis"), np.array([axis], "int64"))
+
+        # main loop graph
+        loop_name = node.name + "/loop"
+        iter_num = GraphBuilder(graph).make_unsqueeze({'data': graph.input_names[0], 'axes': [0]})
+        one_node = graph.make_const(utils.make_name("one"), np.array(1, "int64"))
+        zero_node = graph.make_const(utils.make_name("zero"), np.array([0], "int64"))
+
+        add_node = graph.make_node("Add", inputs=[iter_num, one_node.output[0]],
+                                   outputs=[utils.make_name("add")], op_name_scope=loop_name)
+
+        if node.get_attr_value("reverse"):
+            pad_axis = [zero_node.output[0], add_node.output[0]]
+            start_slice = add_node.output[0]
+            end_slice = graph.input_names[3]
+        else:
+            neg_node = graph.make_node("Neg", inputs=[add_node.output[0]],
+                                       outputs=[utils.make_name("neg")], op_name_scope=loop_name)
+            pad_axis = [add_node.output[0], zero_node.output[0]]
+            start_slice = zero_node.output[0]
+            end_slice = neg_node.output[0]
+
+        pads_node = cls.get_pads_node(graph, pad_axis, axis, input_rank, is_pad_axis_const=False, base_name=loop_name)
+        slice_node = graph.make_node("Slice", op_name_scope=loop_name, outputs=[utils.make_name("slice")],
+                                     inputs=[graph.input_names[2], start_slice, end_slice, axis_node.output[0]])
+        if graph.get_dtype(slice_node.output[0]) != graph.get_dtype(one_node.output[0]):
+            pad_const_node = graph.make_node("Cast", inputs=[one_node.output[0]],
+                                             attr={"to": graph.get_dtype(slice_node.output[0])},
+                                             op_name_scope=loop_name, outputs=[utils.make_name("pad_const")])
+        else:
+            pad_const_node = one_node
+        pad_node = graph.make_node("Pad", inputs=[slice_node.output[0], pads_node.output[0], pad_const_node.output[0]],
+                                   op_name_scope=loop_name, outputs=[utils.make_name("pad")])
+        mul_node = graph.make_node("Mul", inputs=[graph.input_names[4], pad_node.output[0]],
+                                   op_name_scope=loop_name, outputs=[utils.make_name("mul")],
+                                   shapes=[inputs_tensor_shape], dtypes=[inputs_tensor_dtype])
+
+        # manage loop outputs
+        output_cond_node = graph.make_node("Identity", inputs=[graph.input_names[1]], op_name_scope=loop_name,
+                                           outputs=[utils.make_name("condition_out")])
+        output_inp_node = graph.make_node("Identity", inputs=[graph.input_names[2]], op_name_scope=loop_name,
+                                          outputs=[utils.make_name("inputs_out")])
+        output_axis_length_plus_one_node = graph.make_node("Identity", inputs=[graph.input_names[3]],
+                                                           op_name_scope=loop_name,
+                                                           outputs=[utils.make_name("axis_length_plus_one_out")])
+        output_acc_node = graph.make_node("Identity", inputs=[mul_node.output[0]], op_name_scope=loop_name,
+                                          outputs=[utils.make_name("accumulator_out")])
+
+        graph.add_graph_output(output_cond_node.output[0])                  # 1 condition output
+        graph.add_graph_output(output_inp_node.output[0])                   # N loop carried dependencies outputs
+        graph.add_graph_output(output_axis_length_plus_one_node.output[0])  # N loop carried dependencies outputs
+        graph.add_graph_output(output_acc_node.output[0])                   # N loop carried dependencies outputs
+
+        if not isinstance(axis, int): # axis is a tensor, we need to feed it to the loop graph
+            output_axis_node = graph.make_node("Identity", inputs=[axis], op_name_scope=loop_name,
+                                               outputs=[utils.make_name("axis_out")])
+            graph.add_graph_output(output_axis_node.output[0])              # N loop carried dependencies outputs
+        return graph
+
+    @classmethod
+    def get_pads_node(cls, graph, pad_axis, axis, rank, is_pad_axis_const=True, base_name=""):
+        if isinstance(axis, int): # axis, is a const, we directly compute padding values
+            pre_pad = np.zeros(axis, "int64")
+            post_pad = np.zeros(rank - axis - 1, "int64")
+            if is_pad_axis_const: # pylint: disable=R1705
+                pads = np.concatenate([pre_pad, pad_axis[0:1], post_pad,
+                                       pre_pad, pad_axis[1:2], post_pad])
+                pads_node = graph.make_const(utils.make_name("pads"), pads)
+                return pads_node
+            else:
+                pre_pad_node = graph.make_const(utils.make_name("pre_pad"), pre_pad)
+                post_pad_node = graph.make_const(utils.make_name("post_pad"), post_pad)
+
+        else: # axis is a tensor, we need to compute padding values at runtime
+            if is_pad_axis_const:
+                pad_axis = [graph.make_const(utils.make_name("pad"),
+                                             np.array([pad], "int64")).output[0] for pad in pad_axis]
+
+            rank_tensor = graph.make_const(utils.make_name("rank"), np.array([rank], "int64")).output[0]
+            zero_node = graph.make_const(utils.make_name("zero"), np.array([0], "int64"))
+            one_node = graph.make_const(utils.make_name("zero"), np.array([1], "int64"))
+
+            post_repeat_node = graph.make_node("Sub", inputs=[rank_tensor, axis],
+                                               outputs=[utils.make_name("post_repeat")], op_name_scope=base_name)
+            post_repeat_node = graph.make_node("Sub", inputs=[post_repeat_node.output[0], one_node.output[0]],
+                                               outputs=[utils.make_name("post_repeat")], op_name_scope=base_name)
+
+            pre_pad_node = graph.make_node("Tile", inputs=[zero_node.output[0], axis], op_name_scope=base_name,
+                                           attr={"axis": 0}, outputs=[utils.make_name("pre_pad")])
+
+            post_pad_node = graph.make_node("Tile", inputs=[zero_node.output[0], post_repeat_node.output[0]],
+                                            attr={"axis": 0}, outputs=[utils.make_name("post_pad")],
+                                            op_name_scope=base_name)
+
+        pads_node = graph.make_node("Concat", attr={"axis": 0}, outputs=[utils.make_name("pads")],
+                                    op_name_scope=base_name,
+                                    inputs=[pre_pad_node.output[0], pad_axis[0], post_pad_node.output[0],
+                                            pre_pad_node.output[0], pad_axis[1], post_pad_node.output[0]])
+        return pads_node
+
+
 @tf_op("Round")
 class Round:
     @classmethod
@@ -577,7 +792,6 @@ class Det:
 
 @tf_op(["LeftShift", "RightShift"])
 class BitShift:
-
     @classmethod
     def version_11(cls, ctx, node, **kwargs):
         dir_map = {"LeftShift": "LEFT", "RightShift": "RIGHT"}
@@ -601,6 +815,16 @@ class BitShift:
             ctx.set_dtype(cast_back_node.output[0], dtypes[0])
             ctx.copy_shape(node.name, cast_back_node.output[0])
             ctx.copy_dtype(node.input[0], node.output[0])
+
+
+@tf_op("BitwiseAnd")
+@tf_op("BitwiseOr")
+@tf_op("BitwiseXor")
+@tf_op("Invert", onnx_op="BitwiseNot")
+class BitwiseOps:
+    @classmethod
+    def version_18(cls, ctx, node, **kwargs):
+        pass
 
 
 @tf_op("SquaredDistance", onnx_op="MeanSquaredDistance")
@@ -826,3 +1050,15 @@ class HardSwish:
     @classmethod
     def version_14(cls, ctx, node, **kwargs):
         pass
+
+
+@tf_op(["L2Normalization"], onnx_op="LpNormalization")
+class L2Normalization:
+    @classmethod
+    def version_1(cls, ctx, node, **kwargs):
+        axis = node.get_attr_value("axis")
+        if axis is None:
+            # by default use the last dim
+            axis = -1
+        node.set_attr("axis", axis)
+        node.set_attr("p", 2)

@@ -10,7 +10,7 @@ python -m tf2onnx.convert : api and commandline tool to convert a tensorflow mod
 import argparse
 import os
 import sys
-from distutils.version import LooseVersion
+from packaging.version import Version
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = "3"
 
@@ -20,7 +20,7 @@ from tf2onnx.tfonnx import process_tf_graph
 from tf2onnx import constants, logging, utils, optimizer
 from tf2onnx import tf_loader
 from tf2onnx.graph import ExternalTensorStorage
-from tf2onnx.tf_utils import compress_graph_def
+from tf2onnx.tf_utils import compress_graph_def, get_tf_version
 
 
 
@@ -86,11 +86,12 @@ def get_args():
 
     # experimental
     parser.add_argument("--inputs-as-nchw", help="transpose inputs as from nhwc to nchw")
+    parser.add_argument("--outputs-as-nchw", help="transpose outputs as from nhwc to nchw")
     args = parser.parse_args()
 
     args.shape_override = None
     if args.input:
-        # for backward compativility
+        # for backward compatibility
         args.graphdef = args.input
     if args.graphdef or args.checkpoint:
         if not args.inputs or not args.outputs:
@@ -112,6 +113,8 @@ def get_args():
         args.rename_inputs = args.rename_inputs.split(",")
     if args.inputs_as_nchw:
         args.inputs_as_nchw = args.inputs_as_nchw.split(",")
+    if args.outputs_as_nchw:
+        args.outputs_as_nchw = args.outputs_as_nchw.split(",")
     if args.target:
         args.target = args.target.split(",")
     if args.signature_def:
@@ -120,10 +123,14 @@ def get_args():
         if not args.tflite:
             parser.error("dequantize flag is currently only supported for tflite")
     if args.extra_opset:
-        tokens = args.extra_opset.split(':')
-        if len(tokens) != 2:
-            parser.error("invalid extra_opset argument")
-        args.extra_opset = [utils.make_opsetid(tokens[0], int(tokens[1]))]
+        all_extra_opsets = args.extra_opset.split(',')
+        extra_opset_list = []
+        for extra_opset in all_extra_opsets:
+            tokens = extra_opset.split(':')
+            if len(tokens) != 2:
+                parser.error("invalid extra_opset argument")
+            extra_opset_list.append(utils.make_opsetid(tokens[0], int(tokens[1])))
+        args.extra_opset = extra_opset_list
     if args.load_op_libraries:
         args.load_op_libraries = args.load_op_libraries.split(",")
     return args
@@ -275,6 +282,7 @@ def main():
             input_names=inputs,
             output_names=outputs,
             inputs_as_nchw=args.inputs_as_nchw,
+            outputs_as_nchw=args.outputs_as_nchw,
             large_model=args.large_model,
             tensors_to_rename=tensors_to_rename,
             ignore_default=args.ignore_default,
@@ -356,8 +364,8 @@ def _is_legacy_keras_model(model):
 
 
 def _from_keras_tf1(model, opset=None, custom_ops=None, custom_op_handlers=None, custom_rewriter=None,
-                    inputs_as_nchw=None, extra_opset=None, shape_override=None, target=None,
-                    large_model=False, output_path=None):
+                    inputs_as_nchw=None, outputs_as_nchw=None, extra_opset=None, shape_override=None,
+                    target=None, large_model=False, output_path=None):
     """from_keras for tf 1.15"""
     input_names = [t.name for t in model.inputs]
     output_names = [t.name for t in model.outputs]
@@ -392,6 +400,7 @@ def _from_keras_tf1(model, opset=None, custom_ops=None, custom_op_handlers=None,
             input_names=input_names,
             output_names=output_names,
             inputs_as_nchw=inputs_as_nchw,
+            outputs_as_nchw=outputs_as_nchw,
             large_model=large_model,
             tensors_to_rename=tensors_to_rename,
             initialized_tables=initialized_tables,
@@ -401,7 +410,7 @@ def _from_keras_tf1(model, opset=None, custom_ops=None, custom_op_handlers=None,
 
 
 def from_keras(model, input_signature=None, opset=None, custom_ops=None, custom_op_handlers=None,
-               custom_rewriter=None, inputs_as_nchw=None, extra_opset=None, shape_override=None,
+               custom_rewriter=None, inputs_as_nchw=None, outputs_as_nchw=None, extra_opset=None, shape_override=None,
                target=None, large_model=False, output_path=None, optimizers=None):
     """Returns a ONNX model_proto for a tf.keras model.
 
@@ -417,7 +426,8 @@ def from_keras(model, input_signature=None, opset=None, custom_ops=None, custom_
         custom_rewriter: list of custom graph rewriters
         extra_opset: list of extra opset's, for example the opset's used by custom ops
         shape_override: dict with inputs that override the shapes given by tensorflow
-        inputs_as_nchw: transpose inputs in list from nchw to nhwc
+        inputs_as_nchw: transpose inputs in list from nhwc to nchw
+        outputs_as_nchw: transpose outputs in list from nhwc to nchw
         large_model: use the ONNX external tensor storage format
         output_path: save model to output_path
         optimizers: list (subset) of tf2onnx optimizers if applying all optimizers is not desired.
@@ -425,9 +435,9 @@ def from_keras(model, input_signature=None, opset=None, custom_ops=None, custom_
     Returns:
         An ONNX model_proto and an external_tensor_storage dict.
     """
-    if LooseVersion(tf.__version__) < "2.0":
+    if get_tf_version() < Version("2.0"):
         return _from_keras_tf1(model, opset, custom_ops, custom_op_handlers, custom_rewriter, inputs_as_nchw,
-                               extra_opset, shape_override, target, large_model, output_path)
+                               outputs_as_nchw, extra_opset, shape_override, target, large_model, output_path)
 
     old_out_names = _rename_duplicate_keras_model_names(model)
     from tensorflow.python.keras.saving import saving_utils as _saving_utils # pylint: disable=import-outside-toplevel
@@ -462,8 +472,12 @@ def from_keras(model, input_signature=None, opset=None, custom_ops=None, custom_
                 tensorflow_core.python.keras.backend.learning_phase = old_get_learning_phase
 
     # These inputs will be removed during freezing (includes resources, etc.)
-    graph_captures = concrete_func.graph._captures  # pylint: disable=protected-access
-    captured_inputs = [t_name.name for t_val, t_name in graph_captures.values()]
+    if hasattr(concrete_func.graph, '_captures'):
+        graph_captures = concrete_func.graph._captures  # pylint: disable=protected-access
+        captured_inputs = [t_name.name for _, t_name in graph_captures.values()]
+    else:
+        graph_captures = concrete_func.graph.function_captures.by_val_internal
+        captured_inputs = [t.name for t in graph_captures.values()]
     input_names = [input_tensor.name for input_tensor in concrete_func.inputs
                    if input_tensor.name not in captured_inputs]
     output_names = [output_tensor.name for output_tensor in concrete_func.outputs
@@ -500,6 +514,7 @@ def from_keras(model, input_signature=None, opset=None, custom_ops=None, custom_
             input_names=input_names,
             output_names=output_names,
             inputs_as_nchw=inputs_as_nchw,
+            outputs_as_nchw=outputs_as_nchw,
             large_model=large_model,
             tensors_to_rename=tensors_to_rename,
             initialized_tables=initialized_tables,
@@ -509,8 +524,8 @@ def from_keras(model, input_signature=None, opset=None, custom_ops=None, custom_
 
 
 def from_function(function, input_signature=None, opset=None, custom_ops=None, custom_op_handlers=None,
-                  custom_rewriter=None, inputs_as_nchw=None, extra_opset=None, shape_override=None, target=None,
-                  large_model=False, output_path=None):
+                  custom_rewriter=None, inputs_as_nchw=None, outputs_as_nchw=None, extra_opset=None,
+                  shape_override=None, target=None, large_model=False, output_path=None):
     """Returns a ONNX model_proto for a tf.function.
 
     Args:
@@ -525,14 +540,15 @@ def from_function(function, input_signature=None, opset=None, custom_ops=None, c
         custom_rewriter: list of custom graph rewriters
         extra_opset: list of extra opset's, for example the opset's used by custom ops
         shape_override: dict with inputs that override the shapes given by tensorflow
-        inputs_as_nchw: transpose inputs in list from nchw to nhwc
+        inputs_as_nchw: transpose inputs in list from nhwc to nchw
+        outputs_as_nchw: transpose outputs in list from nhwc to nchw
         large_model: use the ONNX external tensor storage format
         output_path: save model to output_path
 
     Returns:
         An ONNX model_proto and an external_tensor_storage dict.
     """
-    if LooseVersion(tf.__version__) < "2.0":
+    if get_tf_version() < Version("2.0"):
         raise NotImplementedError("from_function requires tf-2.0 or newer")
 
     if input_signature is None:
@@ -564,6 +580,7 @@ def from_function(function, input_signature=None, opset=None, custom_ops=None, c
             input_names=input_names,
             output_names=output_names,
             inputs_as_nchw=inputs_as_nchw,
+            outputs_as_nchw=outputs_as_nchw,
             large_model=large_model,
             tensors_to_rename=tensors_to_rename,
             initialized_tables=initialized_tables,
@@ -573,8 +590,9 @@ def from_function(function, input_signature=None, opset=None, custom_ops=None, c
 
 
 def from_graph_def(graph_def, name=None, input_names=None, output_names=None, opset=None, custom_ops=None,
-                   custom_op_handlers=None, custom_rewriter=None, inputs_as_nchw=None, extra_opset=None,
-                   shape_override=None, target=None, large_model=False, tensors_to_rename=None, output_path=None):
+                   custom_op_handlers=None, custom_rewriter=None, inputs_as_nchw=None, outputs_as_nchw=None,
+                   extra_opset=None, shape_override=None, target=None, large_model=False,
+                   tensors_to_rename=None, output_path=None):
     """Returns a ONNX model_proto for a tensorflow graphdef.
 
     Args:
@@ -591,7 +609,8 @@ def from_graph_def(graph_def, name=None, input_names=None, output_names=None, op
         custom_rewriter: list of custom graph rewriters
         extra_opset: list of extra opset's, for example the opset's used by custom ops
         shape_override: dict with inputs that override the shapes given by tensorflow
-        inputs_as_nchw: transpose inputs in list from nchw to nhwc
+        inputs_as_nchw: transpose inputs in list from nhwc to nchw
+        outputs_as_nchw: transpose outputs in list from nhwc to nchw
         large_model: use the ONNX external tensor storage format
         output_path: save model to output_path
 
@@ -628,6 +647,7 @@ def from_graph_def(graph_def, name=None, input_names=None, output_names=None, op
         input_names=input_names,
         output_names=output_names,
         inputs_as_nchw=inputs_as_nchw,
+        outputs_as_nchw=outputs_as_nchw,
         large_model=large_model,
         tensors_to_rename=tensors_to_rename,
         initialized_tables=initialized_tables,
@@ -637,8 +657,8 @@ def from_graph_def(graph_def, name=None, input_names=None, output_names=None, op
 
 
 def from_tflite(tflite_path, input_names=None, output_names=None, opset=None, custom_ops=None, custom_op_handlers=None,
-                custom_rewriter=None, inputs_as_nchw=None, extra_opset=None, shape_override=None, target=None,
-                large_model=False, output_path=None):
+                custom_rewriter=None, inputs_as_nchw=None, outputs_as_nchw=None, extra_opset=None, shape_override=None,
+                target=None, large_model=False, output_path=None):
     """Returns a ONNX model_proto for a tflite model file.
 
     Args:
@@ -651,7 +671,8 @@ def from_tflite(tflite_path, input_names=None, output_names=None, opset=None, cu
             runtime can still open the model. Type is a dictionary `{op name: domain}`.
         custom_op_handlers: dictionary of custom ops handlers
         custom_rewriter: list of custom graph rewriters
-        inputs_as_nchw: transpose inputs in list from nchw to nhwc
+        inputs_as_nchw: transpose inputs in list from nhwc to nchw
+        outputs_as_nchw: transpose outputs in list from nhwc to nchw
         extra_opset: list of extra opset's, for example the opset's used by custom ops
         shape_override: dict with inputs that override the shapes given by tensorflow
         target: list of workarounds applied to help certain platforms
@@ -663,10 +684,6 @@ def from_tflite(tflite_path, input_names=None, output_names=None, opset=None, cu
     """
     if not tflite_path:
         raise ValueError("tflite_path needs to be provided")
-    if not input_names:
-        input_names = []
-    if not output_names:
-        output_names = []
 
     with tf.device("/cpu:0"):
         model_proto, external_tensor_storage = _convert_common(
@@ -684,6 +701,7 @@ def from_tflite(tflite_path, input_names=None, output_names=None, opset=None, cu
             input_names=input_names,
             output_names=output_names,
             inputs_as_nchw=inputs_as_nchw,
+            outputs_as_nchw=outputs_as_nchw,
             large_model=large_model,
             tensors_to_rename=None,
             initialized_tables=None,

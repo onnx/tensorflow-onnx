@@ -16,6 +16,7 @@ from tf2onnx.tflite_handlers.tfl_math import separate_fused_activation_function
 class TflTransposeConv:
     @classmethod
     def to_tf(cls, ctx, node, **kwargs):
+        separate_fused_activation_function(ctx, node)
         # No need to change 'padding' attribute
         stride_h = node.get_attr_int("stride_h")
         stride_w = node.get_attr_int("stride_w")
