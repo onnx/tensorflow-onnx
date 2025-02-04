@@ -34,10 +34,13 @@ _OUTPUT3 = "output3:0"
 
 if is_tf2():
     # There is no LSTMBlockCell in tf-2.x
-    BasicLSTMCell = getattr(tf.compat.v1.nn.rnn_cell, "BasicLSTMCell", None)
-    LSTMCell = getattr(tf.compat.v1.nn.rnn_cell, "LSTMCell", None)
-    GRUCell = getattr(tf.compat.v1.nn.rnn_cell, "GRUCell", None)
-    MultiRNNCell = getattr(tf.compat.v1.nn.rnn_cell, "MultiRNNCell", None)
+    try:
+        BasicLSTMCell = getattr(tf.compat.v1.nn.rnn_cell, "BasicLSTMCell", None)
+        LSTMCell = getattr(tf.compat.v1.nn.rnn_cell, "LSTMCell", None)
+        GRUCell = getattr(tf.compat.v1.nn.rnn_cell, "GRUCell", None)
+        MultiRNNCell = getattr(tf.compat.v1.nn.rnn_cell, "MultiRNNCell", None)
+    except ImportError:
+        pass
     dynamic_rnn = tf.compat.v1.nn.dynamic_rnn
     bidirectional_dynamic_rnn = tf.compat.v1.nn.bidirectional_dynamic_rnn
 else:
