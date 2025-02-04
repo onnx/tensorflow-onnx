@@ -35,8 +35,10 @@ runs:
               pip install numpy==1.19.0
           else 
               if [[ "${{ inputs.tf_version }}" != "2.13" && "${{ inputs.tf_version }}" != "2.9" ]]; then 
+                echo "-- install-2 TF-KERAS ${{ inputs.tf_version }}"
                 pip install tf_keras==${{ inputs.tf_version }} tensorflow==${{ inputs.tf_version }}
               else
+                echo "-- install-2 TF ${{ inputs.tf_version }}"
                 pip install "protobuf<3.20" tensorflow==${{ inputs.tf_version }}
               fi
           fi
