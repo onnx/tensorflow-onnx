@@ -351,9 +351,9 @@ def read_tf_node_def_attrs(node_def, input_dtypes, input_shapes):
 # ignore the following attributes
 TF_IGNORED_NODE_ATTRS = {
     "T", "unknown_rank", "_class", "Tshape", "use_cudnn_on_gpu", "Index", "Tpaddings",
-    "TI", "Tparams", "Tindices", "Tlen", "Tdim", "Tin", "dynamic_size", "Tmultiples",
+    "TI", "Tparams", "Tindices", "Tlen", "Tdim", "dynamic_size", "Tmultiples",
     "Tblock_shape", "Tcrops", "index_type", "Taxis", "U", "maxval",
-    "Tout", "Tlabels", "Tindex", "element_shape", "Targmax", "Tperm", "Tcond",
+    "Tlabels", "Tindex", "element_shape", "Targmax", "Tperm", "Tcond",
     "T_threshold", "shape_type", "_lower_using_switch_merge",
     "parallel_iterations", "_num_original_outputs", "output_types", "output_shapes",
     "key_dtype", "value_dtype", "Tin", "Tout", "capacity", "component_types", "shapes",
