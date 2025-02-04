@@ -474,7 +474,7 @@ class Test(object):
             for k in input_names:
                 v = self.input_names[k]
                 inputs[to_rename.get(k, k)] = tf.constant(self.make_input(v))
-            tf_func = tf.function(concrete_func)
+            tf_func = tf.function(self.concrete_function)
             logger.info("Running TF")
             tf_results_d = tf_func(**inputs)
             # If there is only a single output a dict might not be returned
