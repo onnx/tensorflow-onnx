@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
 
-  Test_min_py38_with_min_tf: # Do not change this name because it is used in Ruleset of this repo.
+  Test_min_py38_tf2_9: # Do not change this name because it is used in Ruleset of this repo.
     strategy:
       fail-fast: false
     runs-on: ubuntu-latest
@@ -42,7 +42,7 @@ jobs:
           name: Test Results (Py38-TF2.9-18-ubuntu)
           path: ./**/test-results-*.xml
 
-  Test_max_py310_with_latest_tf: # Do not change this name because it is used in Ruleset of this repo.
+  Test_max_py310_tf2_18: # Do not change this name because it is used in Ruleset of this repo.
     strategy:
       fail-fast: false
     runs-on: ubuntu-latest
@@ -69,7 +69,7 @@ jobs:
           name: Test Results (Py310-TF2.18-18-ubuntu)
           path: ./**/test-results-*.xml
 
-  Test_max_py311_with_latest_tf: # Do not change this name because it is used in Ruleset of this repo.
+  Test_max_py311_tf2_18: # Do not change this name because it is used in Ruleset of this repo.
     strategy:
       fail-fast: false
     runs-on: ubuntu-latest
@@ -96,7 +96,7 @@ jobs:
           name: Test Results (Py311-TF2.18-18-ubuntu)
           path: ./**/test-results-*.xml
 
-  Test_max_py312_with_latest_tf: # Do not change this name because it is used in Ruleset of this repo.
+  Test_max_py312_tf2_18: # Do not change this name because it is used in Ruleset of this repo.
     strategy:
       fail-fast: false
     runs-on: ubuntu-latest
@@ -123,7 +123,7 @@ jobs:
           name: Test Results (Py312-TF2.18-18-ubuntu)
           path: ./**/test-results-*.xml
 
-  Extra_tests:
+  Extra_tests4:
     strategy:
       fail-fast: false
       matrix:
@@ -196,7 +196,7 @@ jobs:
 
   publish-test-results:
     name: "Publish Tests Results to Github"
-    needs: [Test_min_py38_with_min_tf, Test_max_py310_with_latest_tf, Test_max_py311_with_latest_tf, Test_max_py312_with_latest_tf, Extra_tests]
+    needs: [Test_min_py38_tf2_9, Test_max_py310_tf2_18, Test_max_py311_tf2_18, Test_max_py312_tf2_18, Extra_tests]
     runs-on: ubuntu-latest
     permissions:
       checks: write

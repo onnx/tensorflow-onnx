@@ -50,6 +50,10 @@ runs:
           pip install keras-self-attention
           pip install pytest pytest-cov pytest-runner
 
+          if [[ ${{ inputs.tf_version }} <= 2.15 ]]; then 
+            pip install "protobuf<3.20"
+          fi
+
           if [[ ${{ inputs.tf_version }} == 1.* ]]; then 
               pip install keras==2.3.1
               pip install transformers==4.2.0
@@ -58,7 +62,9 @@ runs:
               pip install numpy==1.19.0
           else 
               pip install transformers
-              pip install tf_keras==${{ inputs.tf_version }}
+              if [[ ${{ inputs.tf_version }} != 2.13 ]]; then 
+                pip install tf_keras==${{ inputs.tf_version }}
+              fi
           fi
 
           pip install -e .

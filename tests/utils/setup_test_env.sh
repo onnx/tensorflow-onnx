@@ -22,7 +22,9 @@ pip install onnx==$ONNX_VERSION onnxruntime==$ORT_VERSION onnxruntime-extensions
 if [[ $TF_VERSION == 1.* ]]; then 
     pip install numpy==1.19.0
 else 
-    pip install tf_keras==$TF_VERSION
+    if [[ ${{ inputs.tf_version }} != 2.13 ]]; then 
+        pip install tf_keras==$TF_VERSION
+    fi
 fi
 
 python setup.py install

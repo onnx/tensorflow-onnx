@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
 
-  Test_min_py38_with_min_tf: # Do not change this name because it is used in 'publish-test-results' section below.
+  Test_min_py38_tf2_9: # Do not change this name because it is used in 'publish-test-results' section below.
     strategy:
       fail-fast: false
     runs-on: ubuntu-latest
@@ -42,7 +42,7 @@ jobs:
           name: Test Results (Py38-TF2.9-18-ubuntu)
           path: ./**/test-results-*.xml
 
-  Test_max_py310_with_latest_tf: # Do not change this name because it is used in 'publish-test-results' section below.
+  Test_max_py310_tf2_18: # Do not change this name because it is used in 'publish-test-results' section below.
     strategy:
       fail-fast: false
     runs-on: ubuntu-latest
@@ -69,7 +69,7 @@ jobs:
           name: Test Results (Py310-TF2.18-18-ubuntu)
           path: ./**/test-results-*.xml
 
-  Test_max_py312_with_latest_tf: # Do not change this name because it is used in 'publish-test-results' section below.
+  Test_max_py312_tf2_18: # Do not change this name because it is used in 'publish-test-results' section below.
     strategy:
       fail-fast: false
     runs-on: ubuntu-latest
@@ -122,7 +122,7 @@ jobs:
           name: Test Results (Py37-TF1.15-15-ubuntu)
           path: ./**/test-results-*.xml
 
-  Extra_tests:  # Do not change this name because it is used in 'publish-test-results' section below.
+  Extra_tests3:  # Do not change this name because it is used in 'publish-test-results' section below.
     strategy:
       fail-fast: false
       matrix:
@@ -186,7 +186,7 @@ jobs:
 
   publish-test-results:
     name: "Publish Tests Results to Github"
-    needs: [Test_min_py38_with_min_tf, Test_max_py310_with_latest_tf, Test_max_py312_with_latest_tf, Test_py37_with_tf1_15, Extra_tests]
+    needs: [Test_min_py38_tf2_9, Test_max_py310_tf2_18, Test_max_py312_tf2_18, Test_py37_with_tf1_15, Extra_tests]
     runs-on: ubuntu-latest
     permissions:
       checks: write
