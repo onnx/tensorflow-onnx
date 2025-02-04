@@ -25,10 +25,10 @@ else
     pip uninstall -y protobuf
     if [[ "$TF_VERSION" != "2.13.0" && "$TF_VERSION" != "2.9.0" ]]; then 
         echo "-- install-3 TF-KERAS $TF_VERSION"
-        pip install tf_keras==$TF_VERSION "tensorflow-text<=$TF_VERSION"
+        pip install tensorflow==$TF_VERSION tf_keras==$TF_VERSION tensorflow-text
     else
         echo "-- install-3 TF $TF_VERSION"
-        pip install "tensorflow-text<=$TF_VERSION" tensorflow==$TF_VERSION protobuf
+        pip install tensorflow-text tensorflow==$TF_VERSION protobuf
     fi
 fi
 
