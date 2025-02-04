@@ -16,17 +16,14 @@ echo "==== ONNXRuntime version: $ORT_VERSION"
 echo "==== ONNX version: $ONNX_VERSION"
 
 pip install pytest pytest-cov pytest-runner coverage graphviz requests pyyaml pillow pandas parameterized sympy coloredlogs flatbuffers timeout-decorator
-pip install onnx==$ONNX_VERSION
-pip install onnxruntime==$ORT_VERSION
-pip install "numpy<2"
-
-pip install onnxruntime-extensions
-pip install "tensorflow-text<=$TF_VERSION"
-
 pip uninstall -y tensorflow
-pip install tensorflow==$TF_VERSION
-pip uninstall -y protobuf
-pip install "protobuf~=3.20"
+pip install onnx==$ONNX_VERSION onnxruntime==$ORT_VERSION onnxruntime-extensions "tensorflow-text<=$TF_VERSION" tensorflow==$TF_VERSION
+
+if [[ $TF_VERSION == 1.* ]]; then 
+    pip install numpy==1.19.0
+else 
+    pip install tf_keras==$TF_VERSION
+fi
 
 python setup.py install
 

@@ -21,7 +21,7 @@ jobs:
           python-version: 3.11
 
       - name: Install dependencies
-        run: pip install pylint==2.4.4
+        run: pip install pylint
 
       - name: Run pylint
         run: |
