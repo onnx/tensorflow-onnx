@@ -26,7 +26,7 @@ runs:
           pip install onnx==${{ inputs.onnx_version }}
           pip uninstall -y protobuf
           pip install "protobuf~=3.20"
-          pip install h5py==3.7.0
+          pip install h5py
           pip install parameterized
           pip install timeout-decorator
           pip install coloredlogs flatbuffers
