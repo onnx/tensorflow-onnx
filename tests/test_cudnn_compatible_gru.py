@@ -16,7 +16,7 @@ from tf2onnx.tf_loader import is_tf2
 # pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test,cell-var-from-loop
 
 if is_tf2():
-    MultiRNNCell = tf.compat.v1.nn.rnn_cell.MultiRNNCell
+    MultiRNNCell = getattr(tf.compat.v1.nn.rnn_cell, "MultiRNNCell", None)
     dynamic_rnn = tf.compat.v1.nn.dynamic_rnn
     bidirectional_dynamic_rnn = tf.compat.v1.nn.bidirectional_dynamic_rnn
 else:

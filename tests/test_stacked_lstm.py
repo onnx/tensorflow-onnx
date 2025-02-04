@@ -16,8 +16,8 @@ from tf2onnx.tf_loader import is_tf2
 # pylint: disable=invalid-name
 
 if is_tf2():
-    LSTMCell = tf.compat.v1.nn.rnn_cell.LSTMCell
-    MultiRNNCell = tf.compat.v1.nn.rnn_cell.MultiRNNCell
+    LSTMCell = getattr(tf.compat.v1.nn.rnn_cell, "LSTMCell", None)
+    MultiRNNCell = getattr(tf.compat.v1.nn.rnn_cell, "MultiRNNCell", None)
     dynamic_rnn = tf.compat.v1.nn.dynamic_rnn
 else:
     LSTMCell = tf.contrib.rnn.LSTMCell

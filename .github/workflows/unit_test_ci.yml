@@ -96,33 +96,6 @@ jobs:
           name: Test Results (Py311-TF2.18-18-ubuntu)
           path: ./**/test-results-*.xml
 
-  Test4_py312_tf2_18: # Do not change this name because it is used in Ruleset of this repo.
-    strategy:
-      fail-fast: false
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Run Tests (Py312-TF2.18-18)
-        uses: ./.github/actions/unit_test
-        with:
-          os: 'ubuntu-latest'
-          tf_version: '2.18.0'
-          python_version: '3.12'
-          ort_version: '1.20.1'
-          onnx_version: '1.17.0'
-          opset_version: '18'
-          skip_tflite: 'False'
-
-      - name: Upload Test Results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: Test Results (Py312-TF2.18-18-ubuntu)
-          path: ./**/test-results-*.xml
-
   Extra_tests4:
     strategy:
       fail-fast: false
@@ -132,16 +105,10 @@ jobs:
           - 'py39-tf2.15'
           - 'py310-tf2.18'
           - 'py311-tf2.18'
-          - 'py312-tf2.18'
         os: ['ubuntu-latest', 'windows-2022']
         opset_version: ['18', '15']
         skip_tflite: ['False']
         include:
-          - name: 'py312-tf2.18'
-            tf_version: '2.18.0'
-            python_version: '3.12'
-            ort_version: '1.20.1'
-            onnx_version: '1.17.0'
           - name: 'py311-tf2.18'
             tf_version: '2.18.0'
             python_version: '3.11'
@@ -196,7 +163,7 @@ jobs:
 
   publish-test-results:
     name: "Publish Tests Results to Github"
-    needs: [Test4_py38_tf2_9, Test4_py310_tf2_18, Test4_py311_tf2_18, Test4_py312_tf2_18, Extra_tests4]
+    needs: [Test4_py38_tf2_9, Test4_py310_tf2_18, Test4_py311_tf2_18, Extra_tests4]
     runs-on: ubuntu-latest
     permissions:
       checks: write

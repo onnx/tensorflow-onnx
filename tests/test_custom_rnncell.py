@@ -16,11 +16,11 @@ from tf2onnx.tf_loader import is_tf2
 # pylint: disable=abstract-method,arguments-differ
 
 if is_tf2():
-    BasicLSTMCell = tf.compat.v1.nn.rnn_cell.BasicLSTMCell
-    LSTMCell = tf.compat.v1.nn.rnn_cell.LSTMCell
-    GRUCell = tf.compat.v1.nn.rnn_cell.GRUCell
-    RNNCell = tf.compat.v1.nn.rnn_cell.RNNCell
-    MultiRNNCell = tf.compat.v1.nn.rnn_cell.MultiRNNCell
+    BasicLSTMCell = getattr(tf.compat.v1.nn.rnn_cell, "BasicLSTMCell", None)
+    LSTMCell = getattr(tf.compat.v1.nn.rnn_cell, "LSTMCell", None)
+    GRUCell = getattr(tf.compat.v1.nn.rnn_cell, "GRUCell", None)
+    RNNCell = getattr(tf.compat.v1.nn.rnn_cell, "RNNCell", None)
+    MultiRNNCell = getattr(tf.compat.v1.nn.rnn_cell, "MultiRNNCell", None)
     dynamic_rnn = tf.compat.v1.nn.dynamic_rnn
     bidirectional_dynamic_rnn = tf.compat.v1.nn.bidirectional_dynamic_rnn
 else:

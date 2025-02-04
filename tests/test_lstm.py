@@ -21,9 +21,9 @@ from tf2onnx.tf_loader import is_tf2
 
 if is_tf2():
     # There is no LSTMBlockCell in tf-2.x
-    BasicLSTMCell = tf.compat.v1.nn.rnn_cell.BasicLSTMCell
-    LSTMCell = tf.compat.v1.nn.rnn_cell.LSTMCell
-    MultiRNNCell = tf.compat.v1.nn.rnn_cell.MultiRNNCell
+    BasicLSTMCell = getattr(tf.compat.v1.nn.rnn_cell, "BasicLSTMCell", None)
+    LSTMCell = getattr(tf.compat.v1.nn.rnn_cell, "LSTMCell", None)
+    MultiRNNCell = getattr(tf.compat.v1.nn.rnn_cell, "MultiRNNCell", None)
     dynamic_rnn = tf.compat.v1.nn.dynamic_rnn
     bidirectional_dynamic_rnn = tf.compat.v1.nn.bidirectional_dynamic_rnn
 else:

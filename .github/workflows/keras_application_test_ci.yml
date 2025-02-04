@@ -96,7 +96,6 @@ jobs:
           - 'py39-tf2.15'
           - 'py310-tf2.18'
           - 'py311-tf2.18'
-          - 'py312-tf2.18'
         os: ['ubuntu-latest', 'windows-2022']
         include:
           - name: 'py38-tf2.13'
@@ -117,11 +116,6 @@ jobs:
           - name: 'py311-tf2.18'
             tf_version: '2.18.0'
             python_version: '3.11'
-            ort_version: '1.20.1'
-            onnx_version: '1.17.0'
-          - name: 'py312-tf2.18'
-            tf_version: '2.18.0'
-            python_version: '3.12'
             ort_version: '1.20.1'
             onnx_version: '1.17.0'
     runs-on: ${{ matrix.os }}

@@ -69,33 +69,6 @@ jobs:
           name: Test Results (Py310-TF2.18-18-ubuntu)
           path: ./**/test-results-*.xml
 
-  Test3_py312_tf2_18: # Do not change this name because it is used in 'publish-test-results' section below.
-    strategy:
-      fail-fast: false
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Run Tests (Py312-TF2.18-18)
-        uses: ./.github/actions/pretrained_model_test
-        with:
-          os: 'ubuntu-latest'
-          tf_version: '2.18.0'
-          python_version: '3.12'
-          ort_version: '1.20.1'
-          onnx_version: '1.17.0'
-          opset_version: '18'
-          skip_tflite: 'False'
-
-      - name: Upload Test Results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: Test Results (Py312-TF2.18-18-ubuntu)
-          path: ./**/test-results-*.xml
-
   Test3_py37_with_tf1_15: # Do not change this name because it is used in 'publish-test-results' section below.
     strategy:
       fail-fast: false
@@ -131,7 +104,6 @@ jobs:
           - 'py39-tf2.15'
           - 'py310-tf2.18'
           - 'py311-tf2.18'
-          - 'py312-tf2.18'
         os: ['ubuntu-latest', 'windows-2022']
         opset_version: ['18', '15']
         skip_tflite: ['False']
@@ -154,11 +126,6 @@ jobs:
           - name: 'py311-tf2.18'
             tf_version: '2.18.0'
             python_version: '3.11'
-            ort_version: '1.20.1'
-            onnx_version: '1.17.0'
-          - name: 'py312-tf2.18'
-            tf_version: '2.18.0'
-            python_version: '3.12'
             ort_version: '1.20.1'
             onnx_version: '1.17.0'
     runs-on: ${{ matrix.os }}
@@ -186,7 +153,7 @@ jobs:
 
   publish-test-results:
     name: "Publish Tests Results to Github"
-    needs: [Test3_py38_tf2_9, Test3_py310_tf2_18, Test3_py312_tf2_18, Test3_py37_with_tf1_15, Extra_tests3]
+    needs: [Test3_py38_tf2_9, Test3_py310_tf2_18, Test3_py37_with_tf1_15, Extra_tests3]
     runs-on: ubuntu-latest
     permissions:
       checks: write

@@ -13,13 +13,13 @@ from tf2onnx.tf_loader import is_tf2
 # pylint: disable=invalid-name
 
 if is_tf2():
-    BasicLSTMCell = tf.compat.v1.nn.rnn_cell.BasicLSTMCell
-    LSTMCell = tf.compat.v1.nn.rnn_cell.LSTMCell
-    RNNCell = tf.compat.v1.nn.rnn_cell.RNNCell
-    MultiRNNCell = tf.compat.v1.nn.rnn_cell.MultiRNNCell
+    BasicLSTMCell = getattr(tf.compat.v1.nn.rnn_cell, "BasicLSTMCell", None)
+    LSTMCell = getattr(tf.compat.v1.nn.rnn_cell, "LSTMCell", None)
+    RNNCell = getattr(tf.compat.v1.nn.rnn_cell, "RNNCell", None)
+    MultiRNNCell = getattr(tf.compat.v1.nn.rnn_cell, "MultiRNNCell", None)
     dynamic_rnn = tf.compat.v1.nn.dynamic_rnn
     bidirectional_dynamic_rnn = tf.compat.v1.nn.bidirectional_dynamic_rnn
-    LSTMStateTuple = tf.compat.v1.nn.rnn_cell.LSTMStateTuple
+    LSTMStateTuple = getattr(tf.compat.v1.nn.rnn_cell, "LSTMStateTuple", None)
 else:
     LSTMCell = tf.contrib.rnn.LSTMCell
     LSTMBlockCell = tf.contrib.rnn.LSTMBlockCell
