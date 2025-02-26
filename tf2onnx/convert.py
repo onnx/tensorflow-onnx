@@ -447,7 +447,7 @@ def from_keras(model, input_signature=None, opset=None, custom_ops=None, custom_
     function = _saving_utils.trace_model_call(model, input_signature)
     try:
         concrete_func = function.get_concrete_function()
-    except TypeError as e:
+    except (TypeError, AttributeError) as e:
         # Legacy keras models don't accept the training arg tf provides so we hack around it
         if "got an unexpected keyword argument 'training'" not in str(e):
             raise e
