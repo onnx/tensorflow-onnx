@@ -62,6 +62,55 @@ jobs:
           name: Test Results (Py310-TF2.15-ubuntu)
           path: ./**/test-results-*.xml
 
+  Test_py311_py_with_latest_tf:
+    strategy:
+      fail-fast: false
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Tests (Py311-TF2.18)
+        uses: ./.github/actions/keras_unit_test
+        with:
+          tf_version: '2.18.0'
+          python_version: '3.11'
+          ort_version: '1.16.3'
+          onnx_version: '1.16.1'
+
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Test Results (Py311-TF2.15-ubuntu)
+          path: ./**/test-results-*.xml
+
+
+  Test_py312_py_with_tf1_18: # Do not change this name because it is used in Ruleset of this repo.
+    strategy:
+      fail-fast: false
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Tests (Py312-TF2.18)
+        uses: ./.github/actions/keras_unit_test
+        with:
+          tf_version: '2.18.0'
+          python_version: '3.12'
+          ort_version: '1.16.3'
+          onnx_version: '1.16.1'
+
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Test Results (Py312-TF2.15-ubuntu)
+          path: ./**/test-results-*.xml
+
   Test_py37_with_tf1_15: # Do not change this name because it is used in Ruleset of this repo.
     strategy:
       fail-fast: false
