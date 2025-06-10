@@ -24,13 +24,10 @@ runs:
           python -m pip install --upgrade pip
           pip install onnxconverter-common
           pip install onnx==${{ inputs.onnx_version }}
-          pip uninstall -y protobuf
-          pip install "protobuf~=3.20"
-          pip install h5py==3.7.0
+          pip install h5py
           pip install parameterized
           pip install timeout-decorator
           pip install coloredlogs flatbuffers
-          pip install tensorflow==${{ inputs.tf_version }}
           pip install onnxruntime==${{ inputs.ort_version }}
           pip install pillow
           pip install opencv-python
@@ -49,16 +46,20 @@ runs:
           pip install git+https://github.com/qubvel/efficientnet
           pip install keras-self-attention
           pip install pytest pytest-cov pytest-runner
+          pip uninstall -y protobuf h5py
 
           if [[ ${{ inputs.tf_version }} == 1.* ]]; then 
-              pip install keras==2.3.1
-              pip install transformers==4.2.0
-              pip uninstall -y h5py
-              pip install h5py==2.9.0
-              pip install numpy==1.19.0
+              echo "-- install-1 TF1-KERAS ${{ inputs.tf_version }}"
+              pip install numpy==1.19.0 tensorflow==${{ inputs.tf_version }} protobuf h5py==2.9.0 transformers==4.2.0 keras h5py
           else 
               pip install transformers
-              pip install "numpy<2"
+              if [[ "${{ inputs.tf_version }}" != "2.13.0" && "${{ inputs.tf_version }}" != "2.9.0" ]]; then
+                echo "-- install-1 TF-KERAS ${{ inputs.tf_version }}"
+                pip install tf_keras==${{ inputs.tf_version }} tensorflow==${{ inputs.tf_version }} protobuf
+              else
+                echo "-- install-1 TF ${{ inputs.tf_version }}"
+                pip install protobuf tensorflow==${{ inputs.tf_version }}
+              fi
           fi
 
           pip install -e .
@@ -71,5 +72,7 @@ runs:
       run: |
           python -c "import onnxruntime"
           pytest tests/keras2onnx_unit_tests --doctest-modules --junitxml=junit/test-results.xml
+
+          export TF_USE_LEGACY_KERAS=True
           cd tests/keras2onnx_applications/nightly_build
           python run_all_v2.py

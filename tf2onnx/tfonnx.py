@@ -74,7 +74,7 @@ def rewrite_constant_fold(g, ops):
     func_map = {
         "Add": np.add,
         "GreaterEqual": np.greater_equal,
-        "Cast": np.cast,
+        "Cast": lambda x, dtype: x.astype(dtype),
         "ConcatV2": np.concatenate,
         "Less": np.less,
         "ListDiff": np.setdiff1d,

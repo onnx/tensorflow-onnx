@@ -474,7 +474,7 @@ class Test(object):
             for k in input_names:
                 v = self.input_names[k]
                 inputs[to_rename.get(k, k)] = tf.constant(self.make_input(v))
-            tf_func = tf.function(concrete_func)
+            tf_func = tf.function(self.concrete_function)
             logger.info("Running TF")
             tf_results_d = tf_func(**inputs)
             # If there is only a single output a dict might not be returned
@@ -492,7 +492,7 @@ class Test(object):
                     tf.profiler.experimental.start(self.tf_profile)
                 while time.time() < stop:
                     for _ in range(PERF_STEP):
-                        _ = concrete_func(**inputs)
+                        _ = self.concrete_function(**inputs)
                     n += PERF_STEP
                 if self.tf_profile is not None:
                     tf.profiler.experimental.stop()

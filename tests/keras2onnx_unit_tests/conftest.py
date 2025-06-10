@@ -13,6 +13,12 @@ from mock_keras2onnx.proto.tfcompat import is_tf2
 K = keras.backend
 
 
+def is_keras_3():
+    if hasattr(keras, '__version__'):
+        return keras.__version__.startswith("3.")
+
+    return False
+
 @pytest.fixture(scope='function')
 def runner():
     np.random.seed(42)
@@ -25,12 +31,19 @@ def runner():
     def runner_func(*args, **kwargs):
         return run_onnx_runtime(*args, model_files, **kwargs)
 
-    # Ensure Keras layer naming is reset for each function
-    if hasattr(K, "reset_uids"):
-        # see https://github.com/onnx/tensorflow-onnx/issues/2370
-        K.reset_uids()
-    # Reset the TensorFlow session to avoid resource leaking between tests
-    K.clear_session()
+    if is_keras_3():
+        import tf_keras
+        if hasattr(K, "reset_uids"):
+            # see https://github.com/onnx/tensorflow-onnx/issues/2370
+            K.reset_uids()
+        tf_keras.backend.clear_session()
+    else:
+        # Ensure Keras layer naming is reset for each function
+        if hasattr(K, "reset_uids"):
+            # see https://github.com/onnx/tensorflow-onnx/issues/2370
+            K.reset_uids()
+        # Reset the TensorFlow session to avoid resource leaking between tests
+        K.clear_session()
 
     # Provide wrapped run_onnx_runtime function
     yield runner_func
