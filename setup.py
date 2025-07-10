@@ -82,7 +82,7 @@ setup(
     author='ONNX',
     author_email='onnx-technical-discuss@lists.lfaidata.foundation',
     url='https://github.com/onnx/tensorflow-onnx',
-    install_requires=['numpy>=1.14.1', 'onnx>=1.4.1', 'requests', 'six', 'flatbuffers>=1.12', 'protobuf~=3.20'],
+    install_requires=['numpy>=1.14.1', 'onnx>=1.4.1', 'requests', 'six', 'flatbuffers>=1.12', 'protobuf>=3.20'],
     classifiers=[
         'Development Status :: 5 - Production/Stable',
         'Intended Audience :: Developers',
