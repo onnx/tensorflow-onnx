@@ -20,7 +20,7 @@ The common issues we run into we try to document here [Troubleshooting Guide](Tr
 <br/>
 
 | Build Type | OS | Python | TensorFlow | ONNX opset |
-| ---        | ---    | ---    | ---        | ---        | ---    |
+| ---        | -  | ---    | ---        | ---        |
 | Unit Test - Basic | Linux, Windows | 3.7-3.10 | 1.15, 2.9-2.15 | 14-18 |
 | Unit Test - Full | Linux, Windows | 3.7-3.10 | 1.15, 2.9-2.15 | 14-18 | 
 <br/>
