@@ -464,7 +464,7 @@ def from_keras3(model, input_signature=None, opset=None, custom_ops=None, custom
     
 
     valid_names = []
-    for out in model.output_names:
+    for out in [t.name for t in model.outputs]:
         if out in reverse_lookup:
             valid_names.append(reverse_lookup[out])
         else:
@@ -481,9 +481,6 @@ def from_keras3(model, input_signature=None, opset=None, custom_ops=None, custom
     with tf.device("/cpu:0"):
         frozen_graph, initialized_tables = \
             tf_loader.from_trackable(model, concrete_func, input_names, output_names, large_model)
-        
-        for node in frozen_graph.node:
-            print(node.name, node.op)
         model_proto, external_tensor_storage = _convert_common(
             frozen_graph,
             name=model.name,
@@ -504,9 +501,6 @@ def from_keras3(model, input_signature=None, opset=None, custom_ops=None, custom
             tensors_to_rename=tensors_to_rename,
             initialized_tables=initialized_tables,
             output_path=output_path)
-        
-        #print(model_proto)
-        
         return model_proto, external_tensor_storage
 
 def from_keras(model, input_signature=None, opset=None, custom_ops=None, custom_op_handlers=None,
