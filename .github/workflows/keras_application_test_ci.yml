@@ -24,11 +24,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Run Tests (Py38-TF2.9)
+      - name: Run Tests (Py39-TF2.9)
         uses: ./.github/actions/keras_application_test
         with:
           tf_version: '2.9.0'
-          python_version: '3.8'
+          python_version: '3.9'
           ort_version: '1.16.3'
           onnx_version: '1.16.1'
 
@@ -36,7 +36,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Test Results (Py38-TF2.9-ubuntu)
+          name: Test Results (Py39-TF2.9-ubuntu)
           path: ./**/test-results-*.xml
 
   Test1_py310_tf2_19: # Do not change this name because it is used in Ruleset of this repo.
