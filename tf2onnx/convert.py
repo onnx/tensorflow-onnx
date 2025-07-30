@@ -433,10 +433,7 @@ def from_keras3(model, input_signature=None, opset=None, custom_ops=None, custom
     Returns:
         A tuple (model_proto, external_tensor_storage_dict)
     """
-
-    
     if not input_signature:
-        
         input_signature = [
             tf.TensorSpec(tensor.shape, tensor.dtype, name=tensor.name.split(":")[0])
             for tensor in model.inputs
@@ -457,12 +454,9 @@ def from_keras3(model, input_signature=None, opset=None, custom_ops=None, custom
                    if input_tensor.name not in captured_inputs]
     output_names = [output_tensor.name for output_tensor in concrete_func.outputs
                     if output_tensor.dtype != tf.dtypes.resource]
-    
 
     tensors_to_rename = tensor_names_from_structed(concrete_func, input_names, output_names)
     reverse_lookup = {v: k for k, v in tensors_to_rename.items()}
-    
-    
 
     valid_names = []
     for out in [t.name for t in model.outputs]:
