@@ -340,8 +340,6 @@ model_proto, external_tensor_storage = tf2onnx.convert.from_keras(model,
         An ONNX model_proto and an external_tensor_storage dict.
 ```
 
-See [tutorials/keras-resnet50.ipynb](tutorials/keras-resnet50.ipynb) for an end to end example.
-
 ### from_function (tf-2.0 and newer)
 ```
 import tf2onnx

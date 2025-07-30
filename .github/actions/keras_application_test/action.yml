@@ -32,7 +32,6 @@ runs:
           pip install pillow
           pip install opencv-python
           pip install tqdm
-          pip install keras-segmentation==0.2.0
           git clone https://github.com/matterport/Mask_RCNN
           cd Mask_RCNN
           pip install -r requirements.txt
@@ -40,17 +39,19 @@ runs:
           cd ..
           pip install matplotlib
           git clone https://github.com/qqwweee/keras-yolo3
-          pip install keras-resnet
           pip install git+https://www.github.com/keras-team/keras-contrib.git
           pip install keras-tcn==2.8.3
           pip install git+https://github.com/qubvel/efficientnet
-          pip install keras-self-attention
           pip install pytest pytest-cov pytest-runner
           pip uninstall -y protobuf h5py
 
           if [[ ${{ inputs.tf_version }} == 1.* ]]; then 
               echo "-- install-1 TF1-KERAS ${{ inputs.tf_version }}"
               pip install numpy==1.19.0 tensorflow==${{ inputs.tf_version }} protobuf h5py==2.9.0 transformers==4.2.0 keras h5py
+              # deprecated packages
+              pip install keras-self-attention
+              pip install keras-segmentation==0.2.0          
+              pip install keras-resnet
           else 
               pip install transformers
               if [[ "${{ inputs.tf_version }}" != "2.13.0" && "${{ inputs.tf_version }}" != "2.9.0" ]]; then
