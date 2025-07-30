@@ -86,18 +86,6 @@ def get_save_spec(model, dynamic_batch=False):
     return specs
 
 
-class SimpleWrapperModel(tf.keras.Model):
-    def __init__(self, func):
-        super(SimpleWrapperModel, self).__init__()
-        self.func = func
-
-    def call(self, inputs, **kwargs):
-        return self.func(inputs)
-
-    def _get_save_spec(self, dynamic_batch=False):
-        return get_save_spec(self, dynamic_batch=dynamic_batch)
-
-
 def test_lenet(runner):
     tf.keras.backend.clear_session()
     lenet = LeNet()
@@ -127,7 +115,11 @@ def test_tf_ops(runner):
         x = x - tf.cast(tf.expand_dims(r, axis=0), tf.float32)
         return x
 
-    dm = SimpleWrapperModel(op_func)
+    class Model(tf.keras.Model):
+        def call(self, inputs, **kwargs):
+            return op_func(inputs)
+
+    dm = Model()
     inputs = [tf.random.normal((3, 2, 20)), tf.random.normal((3, 2, 20))]
     expected = dm.predict(inputs)
     oxml = convert_keras(dm)
@@ -235,7 +227,11 @@ def test_tf_where(runner):
         c = tf.logical_or(tf.cast(a, tf.bool), tf.cast(b, tf.bool))
         return c
 
-    swm = SimpleWrapperModel(_tf_where)
+    class Model(tf.keras.Model):
+        def call(self, inputs, **kwargs):
+            return _tf_where(inputs)
+
+    swm = Model()
     const_in = [np.array([2, 4, 6, 8, 10]).astype(np.int32)]
     expected = swm(const_in)
     if hasattr(swm, "_set_input"):
