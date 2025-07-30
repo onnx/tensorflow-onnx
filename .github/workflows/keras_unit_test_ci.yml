@@ -86,30 +86,6 @@ jobs:
           name: Test Results (Py311-TF2.19-ubuntu)
           path: ./**/test-results-*.xml
 
-  Test2_py37_with_tf1_15: # Do not change this name because it is used in Ruleset of this repo.
-    strategy:
-      fail-fast: false
-    runs-on: ubuntu-22.04
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Run Tests (Py37-TF1.15)
-        uses: ./.github/actions/keras_unit_test
-        with:
-          tf_version: '1.15.5'
-          python_version: '3.7'
-          ort_version: '1.14.1'
-          onnx_version: '1.14.1'
-
-      - name: Upload Test Results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: Test Results (Py37-TF1.15-ubuntu)
-          path: ./**/test-results-*.xml
-
   Extra_tests2:
     strategy:
       fail-fast: false
@@ -163,7 +139,7 @@ jobs:
 
   publish-test-results:
     name: "Publish Tests Results to Github"
-    needs: [Test2_py38_tf2_9, Test2_py310_tf2_19, Test2_py311_tf2_19, Test2_py37_with_tf1_15, Extra_tests2]
+    needs: [Test2_py38_tf2_9, Test2_py310_tf2_19, Test2_py311_tf2_19, Extra_tests2]
     runs-on: ubuntu-latest
     permissions:
       checks: write

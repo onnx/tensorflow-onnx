@@ -46,11 +46,7 @@ You can install tf2onnx on top of tf-1.x or tf-2.x.
 
 ### Python
 
-<<<<<<< HEAD
-We support Python ```3.7-3.11```.
-=======
-We support Python ```3.7-3.12```.
->>>>>>> c34ac1d751427cf5d98023a21cce4c82b0cf96a1
+We support Python ```3.8-3.12```.
 
 ## Prerequisites
 
