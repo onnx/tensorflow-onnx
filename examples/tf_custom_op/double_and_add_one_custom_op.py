@@ -7,7 +7,6 @@ import onnx
 import os
 from tf2onnx import utils
 from tf2onnx.handler import tf_op
-from tf2onnx.tf_loader import tf_placeholder
 
 
 DIR_PATH = os.path.realpath(os.path.dirname(__file__))

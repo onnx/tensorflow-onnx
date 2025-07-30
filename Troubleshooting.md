@@ -36,3 +36,7 @@ An example of this is the [ONNX Slice operator before opset-10](https://github.c
 You can pass the options ```--fold_const```(removed after tf2onnx-1.9.3) in the tf2onnx command line that allows tf2onnx to apply more aggressive constant folding which will increase chances to find a constant.
 
 If this doesn't work the model is most likely not to be able to convert to ONNX. We used to see this a lot of issue with the ONNX Slice op and in opset-10 was updated for exactly this reason.
+
+## cudaSetDevice() on GPU:0 failed. Status: CUDA-capable device(s) is/are busy or unavailable
+
+See [Regression: TF 2.18 crashes with cudaSetDevice failing due to GPU being busy](https://github.com/tensorflow/tensorflow/issues/78784).

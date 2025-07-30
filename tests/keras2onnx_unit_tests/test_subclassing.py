@@ -49,13 +49,41 @@ class MLP(tf.keras.Model):
         return output
 
 
-class SimpleWrapperModel(tf.keras.Model):
-    def __init__(self, func):
-        super(SimpleWrapperModel, self).__init__()
-        self.func = func
+def get_save_spec(model, dynamic_batch=False):
+  """Returns the save spec of the subclassing keras model."""
+  from tensorflow.python.framework import tensor_spec
+  shapes_dict = getattr(model, '_build_shapes_dict', None)
+  # TODO: restore dynamic_batch
+  # assert not dynamic_batch, f"get_save_spec: dynamic_batch={dynamic_batch}, shapes_dict={shapes_dict}"
+  if not shapes_dict:
+    return None
 
-    def call(self, inputs, **kwargs):
-        return self.func(inputs)
+  if 'input_shape' not in shapes_dict:
+    raise ValueError(
+        'Model {} cannot be saved because the input shapes have not been set.'
+    )
+
+  input_shape = shapes_dict['input_shape']
+  if isinstance(input_shape, tuple):
+    shape = input_shape
+    shape = (None,) + shape[1:]
+    return tensor_spec.TensorSpec(
+        shape=shape, dtype=model.input_dtype
+    )
+  elif isinstance(input_shape, dict):
+    specs = {}
+    for key, shape in input_shape.items():
+      shape = (None,) + shape[1:]
+      specs[key] = tensor_spec.TensorSpec(
+          shape=shape, dtype=model.input_dtype, name=key
+      )
+    return specs
+  elif isinstance(input_shape, list):
+    specs = []
+    for shape in input_shape:
+      shape = (None,) + shape[1:]
+      specs.append(tensor_spec.TensorSpec(shape=shape, dtype=model.input_dtype))
+    return specs
 
 
 def test_lenet(runner):
@@ -87,7 +115,11 @@ def test_tf_ops(runner):
         x = x - tf.cast(tf.expand_dims(r, axis=0), tf.float32)
         return x
 
-    dm = SimpleWrapperModel(op_func)
+    class Model(tf.keras.Model):
+        def call(self, inputs, **kwargs):
+            return op_func(inputs)
+
+    dm = Model()
     inputs = [tf.random.normal((3, 2, 20)), tf.random.normal((3, 2, 20))]
     expected = dm.predict(inputs)
     oxml = convert_keras(dm)
@@ -195,10 +227,17 @@ def test_tf_where(runner):
         c = tf.logical_or(tf.cast(a, tf.bool), tf.cast(b, tf.bool))
         return c
 
-    swm = SimpleWrapperModel(_tf_where)
+    class Model(tf.keras.Model):
+        def call(self, inputs, **kwargs):
+            return _tf_where(inputs)
+
+    swm = Model()
     const_in = [np.array([2, 4, 6, 8, 10]).astype(np.int32)]
     expected = swm(const_in)
-    swm._set_inputs(const_in)
+    if hasattr(swm, "_set_input"):
+        swm._set_inputs(const_in)
+    else:
+        swm.inputs_spec = const_in
     oxml = convert_keras(swm)
     assert runner('where_test', oxml, const_in, expected)
 

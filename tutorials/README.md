@@ -9,8 +9,6 @@ The following tutorials show how to convert various models to ONNX.
 
 [efficientnet-lite](https://github.com/onnx/tensorflow-onnx/blob/main/tutorials/efficientnet-lite.ipynb)
 
-[keras-resnet50](https://github.com/onnx/tensorflow-onnx/blob/main/tutorials/keras-resnet50.ipynb) - shows how to convert a keras model via python api
-
 ## Object Detectors
 [ssd-mobilenet](https://github.com/onnx/tensorflow-onnx/blob/main/tutorials/ConvertingSSDMobilenetToONNX.ipynb)
 
