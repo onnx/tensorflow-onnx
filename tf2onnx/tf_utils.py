@@ -10,6 +10,7 @@ from packaging.version import Version
 
 import numpy as np
 import tensorflow as tf
+import keras
 
 from tensorflow.core.framework import types_pb2, tensor_pb2, graph_pb2
 from tensorflow.python.framework import tensor_util
@@ -123,6 +124,9 @@ def get_tf_node_attr(node, name):
 
 def get_tf_version():
     return Version(tf.__version__)
+
+def get_keras_version():
+    return Version(keras.__version__)
 
 def compress_graph_def(graph_def):
     """
