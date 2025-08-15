@@ -486,6 +486,7 @@ class Graph(object):
         self.contained_graphs = {}  # {node_name: {node_attribute_name: Graph}}
 
         ops = [Node(node, self) for node in nodes]
+
         if input_names is not None:
             input_names_set = set(input_names)
             for n in ops:
@@ -740,7 +741,6 @@ class Graph(object):
 
             if op.name in self.contained_graphs:
                 remained_sub_graphs[op.name] = self.contained_graphs[op.name]
-
         self._nodes = ops
         self.contained_graphs = remained_sub_graphs
         self._nodes_by_name = {op.name: op for op in ops}
@@ -758,7 +758,7 @@ class Graph(object):
                 raise ValueError("graph input '" + n.name + "' not exist")
         for o in self.outputs:
             if o not in self._output_to_node_name:
-                raise ValueError("graph output '" + o.name + "' not exist")
+                raise ValueError("graph output '" + str(o) + "' not exist")
 
         self._dtypes = remained_dtypes
         self._output_shapes = remained_shapes
