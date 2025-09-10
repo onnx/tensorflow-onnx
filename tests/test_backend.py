@@ -3673,6 +3673,22 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(picks, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
+    @check_opset_min_version(10, "IsInf")
+    def test_where_with_isinf_condition(self):
+        def func(x, y, z):
+            # Use is_inf as condition to trigger the IsInf code path
+            condition = tf.math.is_inf(x)
+            result = tf.where(condition, y, z)
+            return tf.identity(result, name=_TFOUTPUT)
+
+        # Create test data with some infinite values
+        x_val = np.array([1.0, np.inf, 3.0, -np.inf, 5.0], dtype=np.float32)
+        y_val = np.array([0.0, 0.0, 0.0, 0.0, 0.0], dtype=np.float32)
+        z_val = np.array([100.0, 200.0, 300.0, 400.0, 500.0], dtype=np.float32)
+
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val, _INPUT2: z_val})
+
+
     @check_opset_min_version(9, "IsNaN")
     def test_where_isnan(self):
         x_val = np.array([1, 2, -3, float('nan'), -5, -6, float('nan'), 8, 9, 0], dtype=np.float32)
