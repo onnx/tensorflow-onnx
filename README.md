@@ -1,4 +1,8 @@
-<!--- SPDX-License-Identifier: Apache-2.0 -->
+<!--
+Copyright (c) ONNX Project Contributors
+
+SPDX-License-Identifier: Apache-2.0
+-->
 
 # tf2onnx - Convert TensorFlow, Keras, Tensorflow.js and Tflite models to ONNX.
 
@@ -15,10 +19,10 @@ The common issues we run into we try to document here [Troubleshooting Guide](Tr
 
 <br/>
 
-| Build Type | OS | Python | TensorFlow | ONNX opset | Status |
-| ---        | ---    | ---    | ---        | ---        | ---    |
-| Unit Test - Basic | Linux, Windows | 3.7-3.10 | 1.15, 2.9-2.15 | 14-18 | [![Build Status](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_apis/build/status/unit_test?branchName=main)](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_build/latest?definitionId=16&branchName=main) |
-| Unit Test - Full | Linux, Windows | 3.7-3.10 | 1.15, 2.9-2.15 | 14-18 | [![Build Status](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_apis/build/status/unit_test-matrix?branchName=main)](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_build/latest?definitionId=18&branchName=main) | |
+| Build Type | OS | Python | TensorFlow | ONNX opset |
+| ---        | -  | ---    | ---        | ---        |
+| Unit Test - Basic | Linux, Windows | 3.7-3.12 | 1.15, 2.9-2.15 | 14-18 |
+| Unit Test - Full | Linux, Windows | 3.7-3.12 | 1.15, 2.9-2.15 | 14-18 | 
 <br/>
 
 ## Supported Versions
@@ -42,7 +46,7 @@ You can install tf2onnx on top of tf-1.x or tf-2.x.
 
 ### Python
 
-We support Python ```3.7-3.10```.
+We support Python ```3.7-3.12```.
 
 ## Prerequisites
 
