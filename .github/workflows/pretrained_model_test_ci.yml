@@ -15,33 +15,6 @@ concurrency:
 
 jobs:
 
-  Test3_py38_tf2_9: # Do not change this name because it is used in 'publish-test-results' section below.
-    strategy:
-      fail-fast: false
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Run Tests (Py39-TF2.9-18)
-        uses: ./.github/actions/pretrained_model_test
-        with:
-          os: 'ubuntu-latest'
-          tf_version: '2.9.0'
-          python_version: '3.9'
-          ort_version: '1.16.3'
-          onnx_version: '1.16.1'
-          opset_version: '18'
-          skip_tflite: 'False'
-
-      - name: Upload Test Results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: Test Results (Py39-TF2.9-18-ubuntu)
-          path: ./**/test-results-*.xml
-
   Test3_py310_tf2_19: # Do not change this name because it is used in 'publish-test-results' section below.
     strategy:
       fail-fast: false
@@ -51,11 +24,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Run Tests (Py310-TF2.19-18)
+      - name: Run Tests (Py310-TF2.20-18)
         uses: ./.github/actions/pretrained_model_test
         with:
           os: 'ubuntu-latest'
-          tf_version: '2.19.0'
+          tf_version: '2.20.0'
           python_version: '3.10'
           ort_version: '1.20.1'
           onnx_version: '1.17.0'
@@ -66,7 +39,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Test Results (Py310-TF2.19-18-ubuntu)
+          name: Test Results (Py310-TF2.20-18-ubuntu)
           path: ./**/test-results-*.xml
 
   Extra_tests3:  # Do not change this name because it is used in 'publish-test-results' section below.
@@ -74,31 +47,25 @@ jobs:
       fail-fast: false
       matrix:
         name:
-          - 'py38-tf2.13'
           - 'py39-tf2.15'
-          - 'py310-tf2.19'
-          - 'py311-tf2.19'
+          - 'py310-tf2.20'
+          - 'py311-tf2.20'
         os: ['ubuntu-latest', 'windows-2022']
         opset_version: ['18', '15']
         skip_tflite: ['False']
         include:
-          - name: 'py38-tf2.13'
-            tf_version: '2.13.0'
-            python_version: '3.8'
-            ort_version: '1.16.3'
-            onnx_version: '1.16.1'
           - name: 'py39-tf2.15'
             tf_version: '2.15.0'
             python_version: '3.9'
             ort_version: '1.16.3'
             onnx_version: '1.16.1'
-          - name: 'py310-tf2.19'
-            tf_version: '2.19.0'
+          - name: 'py310-tf2.20'
+            tf_version: '2.20.0'
             python_version: '3.10'
             ort_version: '1.20.1'
             onnx_version: '1.17.0'
-          - name: 'py311-tf2.19'
-            tf_version: '2.19.0'
+          - name: 'py311-tf2.20'
+            tf_version: '2.20.0'
             python_version: '3.11'
             ort_version: '1.20.1'
             onnx_version: '1.17.0'
@@ -127,7 +94,7 @@ jobs:
 
   publish-test-results:
     name: "Publish Tests Results to Github"
-    needs: [Test3_py38_tf2_9, Test3_py310_tf2_19, Extra_tests3]
+    needs: [Test3_py310_tf2_19, Extra_tests3]
     runs-on: ubuntu-latest
     permissions:
       checks: write

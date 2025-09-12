@@ -14,7 +14,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  Test2_py38_tf2_9: # Do not change this name because it is used in Ruleset of this repo.
+  Test2_py310_tf2_20: # Do not change this name because it is used in Ruleset of this repo.
     strategy:
       fail-fast: false
     runs-on: ubuntu-latest
@@ -23,34 +23,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Run Tests (Py39-TF2.9)
+      - name: Run Tests (Py310-TF2.20)
         uses: ./.github/actions/keras_unit_test
         with:
-          tf_version: '2.9.0'
-          python_version: '3.9'
-          ort_version: '1.16.3'
-          onnx_version: '1.16.1'
-
-      - name: Upload Test Results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: Test Results (Py39-TF2.9-ubuntu)
-          path: ./**/test-results-*.xml
-
-  Test2_py310_tf2_19: # Do not change this name because it is used in Ruleset of this repo.
-    strategy:
-      fail-fast: false
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Run Tests (Py310-TF2.19)
-        uses: ./.github/actions/keras_unit_test
-        with:
-          tf_version: '2.19.0'
+          tf_version: '2.20.0'
           python_version: '3.10'
           ort_version: '1.20.1'
           onnx_version: '1.17.0'
@@ -59,10 +35,10 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Test Results (Py310-TF2.19-ubuntu)
+          name: Test Results (Py310-TF2.20-ubuntu)
           path: ./**/test-results-*.xml
 
-  Test2_py311_tf2_19: # Do not change this name because it is used in Ruleset of this repo.
+  Test2_py311_tf2_20: # Do not change this name because it is used in Ruleset of this repo.
     strategy:
       fail-fast: false
     runs-on: ubuntu-latest
@@ -71,10 +47,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Run Tests (Py311-TF2.19)
+      - name: Run Tests (Py311-TF2.20)
         uses: ./.github/actions/keras_unit_test
         with:
-          tf_version: '2.19.0'
+          tf_version: '2.20.0'
           python_version: '3.11'
           ort_version: '1.20.1'
           onnx_version: '1.17.0'
@@ -83,7 +59,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Test Results (Py311-TF2.19-ubuntu)
+          name: Test Results (Py311-TF2.20-ubuntu)
           path: ./**/test-results-*.xml
 
   Extra_tests2:
@@ -91,29 +67,23 @@ jobs:
       fail-fast: false
       matrix:
         name:
-          - 'py38-tf2.13'
           - 'py39-tf2.15'
-          - 'py310-tf2.19'
-          - 'py311-tf2.19'
+          - 'py310-tf2.20'
+          - 'py311-tf2.20'
         os: ['ubuntu-latest', 'windows-2022']
         include:
-          - name: 'py38-tf2.13'
-            tf_version: '2.13.0'
-            python_version: '3.8'
-            ort_version: '1.16.3'
-            onnx_version: '1.16.1'
           - name: 'py39-tf2.15'
             tf_version: '2.15.0'
             python_version: '3.9'
             ort_version: '1.16.3'
             onnx_version: '1.16.1'
-          - name: 'py310-tf2.19'
-            tf_version: '2.19.0'
+          - name: 'py310-tf2.20'
+            tf_version: '2.20.0'
             python_version: '3.10'
             ort_version: '1.20.1'
             onnx_version: '1.17.0'
-          - name: 'py311-tf2.19'
-            tf_version: '2.19.0'
+          - name: 'py311-tf2.20'
+            tf_version: '2.20.0'
             python_version: '3.11'
             ort_version: '1.20.1'
             onnx_version: '1.17.0'
@@ -139,7 +109,7 @@ jobs:
 
   publish-test-results:
     name: "Publish Tests Results to Github"
-    needs: [Test2_py38_tf2_9, Test2_py310_tf2_19, Test2_py311_tf2_19, Extra_tests2]
+    needs: [Test2_py310_tf2_20, Test2_py311_tf2_20, Extra_tests2]
     runs-on: ubuntu-latest
     permissions:
       checks: write
