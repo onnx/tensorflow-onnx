@@ -438,11 +438,14 @@ def from_keras3(model, input_signature=None, opset=None, custom_ops=None, custom
         if hasattr(model, "inputs"):
             model_input = model.inputs
         elif hasattr(model, "input_dtype") and hasattr(model, "_build_shapes_dict"):
-            if len(model._build_shapes_dict) == 1:
-                shape = list(model._build_shapes_dict.values())[0]
+            if len(model._build_shapes_dict) == 1:  # noqa: W0212
+                shape = list(model._build_shapes_dict.values())[0]  # noqa: W0212
                 model_input = [tf.Variable(tf.zeros(shape, dtype=model.input_dtype), name="input")]
             else:
-                raise RuntimeError(f"Not implemented yet with input_dtype={model.input_dtype} and model._build_shapes_dict={model._build_shapes_dict}")
+                raise RuntimeError(
+                    f"Not implemented yet with input_dtype={model.input_dtype} "
+                    f"and model._build_shapes_dict={model._build_shapes_dict}"  # noqa: W0212
+                )
         else:
             if not hasattr(model, "inputs_spec"):
                 raise RuntimeError("You may set attribute 'inputs_spec' with your inputs (model.input_specs = ...)")
@@ -493,7 +496,7 @@ def from_keras3(model, input_signature=None, opset=None, custom_ops=None, custom
         try:
             return t.name
         except AttributeError:
-            return f"output:{i}"    
+            return f"output:{i}"
 
     for out in [_get_name(t, i) for i, t in enumerate(model_output)]:
         if out in reverse_lookup:
@@ -501,7 +504,11 @@ def from_keras3(model, input_signature=None, opset=None, custom_ops=None, custom
         else:
             print(f"Warning: Output name '{out}' not found in reverse_lookup.")
             # Fallback: verwende TensorFlow-Ausgangsnamen direkt
-            valid_names = [_get_name(t, i) for i, t in enumerate(concrete_func.outputs) if t.dtype != tf.dtypes.resource]
+            valid_names = [
+                _get_name(t, i)
+                for i, t in enumerate(concrete_func.outputs)
+                if t.dtype != tf.dtypes.resource
+            ]
             break
     output_names = valid_names
 
