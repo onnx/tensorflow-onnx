@@ -195,7 +195,8 @@ class Select:
         handles_nan = node.get_attr_value("handles_nan", False)
         if ctx.get_dtype(node.output[0]) in [TensorProto.FLOAT, TensorProto.DOUBLE]:
             cond_node = node.inputs[0]
-            if cond_node.type == "IsNaN":
+            if cond_node.type in {"IsNaN", "IsInf"}:
+                # We can't use the mul trick if Inf is involved since Inf * 0 = NaN as per IEEE 754.
                 handles_nan = True
             if cond_node.type == "NotEqual" and cond_node.input[0] == cond_node.input[1]:
                 handles_nan = True
