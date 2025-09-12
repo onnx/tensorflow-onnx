@@ -65,7 +65,7 @@ runs:
 
           pip install -e .
 
-          echo "----- List all of depdencies:"
+          echo "----- List all of dependencies: (tensorflow==${{ inputs.tf_version }})"
           pip freeze --all
 
     - name: Run keras_application_test (${{ runner.os }})

@@ -12,9 +12,10 @@ from onnx import save_model as save_model
 
 
 def _check_onnx_version():
-    import pkg_resources
-    min_required_version = pkg_resources.parse_version('1.0.1')
-    current_version = pkg_resources.get_distribution('onnx').parsed_version
+    import packaging.version as pv
+    import onnx
+    min_required_version = pv.Version('1.0.1')
+    current_version = pv.Version(onnx.__version__)
     assert current_version >= min_required_version, 'Keras2ONNX requires ONNX version 1.0.1 or a newer one'
 
 

@@ -7,7 +7,12 @@ Use tf2onnx.keras2onnx_api.convert_keras instead of deprecated keras2onnx.conver
 
 # pylint: disable=unused-argument,missing-docstring
 
-from onnx import mapping, defs
+from onnx import defs
+try:
+    from onnx import _mapping as mapping
+except ImportError:
+    # older onnx
+    from onnx import mapping
 import tensorflow as tf
 import tf2onnx
 from tf2onnx.constants import OPSET_TO_IR_VERSION

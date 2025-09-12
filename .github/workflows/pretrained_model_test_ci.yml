@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
 
-  Test3_py310_tf2_19: # Do not change this name because it is used in 'publish-test-results' section below.
+  Test3_py310_tf2_20: # Do not change this name because it is used in 'publish-test-results' section below.
     strategy:
       fail-fast: false
     runs-on: ubuntu-latest
@@ -94,7 +94,7 @@ jobs:
 
   publish-test-results:
     name: "Publish Tests Results to Github"
-    needs: [Test3_py310_tf2_19, Extra_tests3]
+    needs: [Test3_py310_tf2_20, Extra_tests3]
     runs-on: ubuntu-latest
     permissions:
       checks: write

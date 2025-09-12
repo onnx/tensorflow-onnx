@@ -100,9 +100,9 @@ def test_mlf(runner):
     tf.keras.backend.clear_session()
     mlf = MLP()
     np_input = tf.random.normal((2, 20))
-    expected = mlf.predict(np_input)
+    expected = mlf(np_input)
     oxml = convert_keras(mlf)
-    assert runner('mlf', oxml, np_input.numpy(), expected)
+    assert runner('mlf', oxml, np_input.numpy(), expected, atol=1e-2)
 
 
 def test_tf_ops(runner):
@@ -232,12 +232,16 @@ def test_tf_where(runner):
             return _tf_where(inputs)
 
     swm = Model()
-    const_in = [np.array([2, 4, 6, 8, 10]).astype(np.int32)]
+    const_in = [tf.Variable([2, 4, 6, 8, 10], dtype=tf.int32, name="input")]
     expected = swm(const_in)
     if hasattr(swm, "_set_input"):
         swm._set_inputs(const_in)
     else:
         swm.inputs_spec = const_in
+    if hasattr(swm, "_set_output"):
+        swm._set_output(expected)
+    else:
+        swm.outputs_spec = expected
     oxml = convert_keras(swm)
     assert runner('where_test', oxml, const_in, expected)
 

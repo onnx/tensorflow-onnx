@@ -35,5 +35,5 @@ fi
 
 python setup.py install
 
-echo "----- List all of depdencies:"
+echo "----- List all of dependencies: (tensorflow==$TF_VERSION)"
 pip freeze --all
