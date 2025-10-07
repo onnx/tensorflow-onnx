@@ -42,3 +42,13 @@ class NukeNode:
     @classmethod
     def version_1(cls, ctx, node, **kwargs):
         ctx.remove_node(node.name)
+
+
+@tf_op("StatefulPartitionedCall")
+class StatefulPartitionedCall:
+    @classmethod
+    def version_1(cls, ctx, node, **kwargs):
+        raise NotImplementedError(
+            "This node appears if the graph has local function. It should be inlined first. "
+            "Inline did not work on that model. It seems Conv2D is no longer inlined."
+        )

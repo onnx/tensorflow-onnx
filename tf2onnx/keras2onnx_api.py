@@ -44,7 +44,8 @@ def get_maximum_opset_supported():
     return min(max(OPSET_TO_IR_VERSION.keys()), defs.onnx_opset_version())
 
 def convert_keras(model, name=None, doc_string='', target_opset=None, initial_types=None,
-                  channel_first_inputs=None, debug_mode=False, custom_op_conversions=None):
+                  channel_first_inputs=None, debug_mode=False, custom_op_conversions=None,
+                  input_signature=None):
     """
     :param model: keras model
     :param name: the converted onnx model internal name
@@ -54,16 +55,18 @@ def convert_keras(model, name=None, doc_string='', target_opset=None, initial_ty
     :param channel_first_inputs: A list of channel first input
     :param debug_mode: ignored
     :param custom_op_conversions: ignored
+    :param input_signature: takes precedence on initial_types if specified,
+        example: ``[tf.TensorSpec([None], tf.int32)]``
     :return an ONNX ModelProto
     """
     if target_opset is None:
         target_opset = get_maximum_opset_supported()
-    input_signature = _process_initial_types(initial_types, unknown_dim=None)
+    if input_signature is None:
+        input_signature = _process_initial_types(initial_types, unknown_dim=None)
     name = name or model.name
 
     model, _ = tf2onnx.convert.from_keras(model, input_signature, opset=target_opset,
                                           inputs_as_nchw=channel_first_inputs)
     model.graph.name = name
     model.graph.doc_string = doc_string
-
     return model

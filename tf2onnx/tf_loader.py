@@ -698,6 +698,19 @@ def tf_optimize_grappler(input_names, output_names, graph_def):
     from tensorflow.core.protobuf import meta_graph_pb2 as meta_graph_pb2, config_pb2, rewriter_config_pb2
     from tensorflow.python.grappler import tf_optimizer as tf_opt
 
+    rewriter_config = rewriter_config_pb2.RewriterConfig(
+        function_optimization=rewriter_config_pb2.RewriterConfig.ON
+    )
+
+    config = tf.compat.v1.ConfigProto()
+    config.graph_options.rewrite_options.CopyFrom(rewriter_config)
+
+    with tf.compat.v1.Session(config=config) as sess:
+        tf.import_graph_def(graph_def, name="")
+        optimized_graph_def = sess.graph.as_graph_def(add_shapes=True)
+
+    return optimized_graph_def
+
     config = config_pb2.ConfigProto()
     rewrite_options = config.graph_options.rewrite_options
     config.graph_options.infer_shapes = True

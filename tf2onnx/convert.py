@@ -478,6 +478,7 @@ def from_keras3(model, input_signature=None, opset=None, custom_ops=None, custom
     reverse_lookup = {v: k for k, v in tensors_to_rename.items()}
 
     valid_names = []
+    model_output = None
     if hasattr(model, "outputs"):
         model_output = model.outputs
     else:
@@ -486,7 +487,7 @@ def from_keras3(model, input_signature=None, opset=None, custom_ops=None, custom
         elif model_input and len(model_input) == 1:
             # Let's try something to make unit test work. This should be replaced.
             model_output = [tf.Variable(model_input[0], name="output")]
-        else:
+        elif not output_names:
             raise RuntimeError(
                 "You should set attribute 'outputs_spec' with your outputs "
                 "so that the expected can use that information."
@@ -498,23 +499,20 @@ def from_keras3(model, input_signature=None, opset=None, custom_ops=None, custom
         except AttributeError:
             return f"output:{i}"
 
-    for out in [_get_name(t, i) for i, t in enumerate(model_output)]:
-        if out in reverse_lookup:
-            valid_names.append(reverse_lookup[out])
-        else:
-            print(f"Warning: Output name '{out}' not found in reverse_lookup.")
-            # Fallback: verwende TensorFlow-Ausgangsnamen direkt
-            valid_names = [
-                _get_name(t, i)
-                for i, t in enumerate(concrete_func.outputs)
-                if t.dtype != tf.dtypes.resource
-            ]
-            break
-    output_names = valid_names
-
-
-    #if old_out_names is not None:
-        #model.output_names = old_out_names
+    if model_output:
+        for out in [_get_name(t, i) for i, t in enumerate(model_output)]:
+            if out in reverse_lookup:
+                valid_names.append(reverse_lookup[out])
+            else:
+                print(f"Warning: Output name '{out}' not found in reverse_lookup.")
+                # Fallback: verwende TensorFlow-Ausgangsnamen direkt
+                valid_names = [
+                    _get_name(t, i)
+                    for i, t in enumerate(concrete_func.outputs)
+                    if t.dtype != tf.dtypes.resource
+                ]
+                break
+        output_names = valid_names
 
     with tf.device("/cpu:0"):
         frozen_graph, initialized_tables = \

@@ -6,6 +6,7 @@ import numpy as np
 import tensorflow as tf
 from test_utils import convert_keras_for_test as convert_keras
 from mock_keras2onnx.proto import is_tensorflow_older_than
+import tf2onnx
 
 if (not mock_keras2onnx.proto.is_tf_keras) or (not mock_keras2onnx.proto.tfcompat.is_tf2):
     pytest.skip("Tensorflow 2.0 only tests.", allow_module_level=True)
@@ -17,7 +18,7 @@ class LeNet(tf.keras.Model):
         self.conv2d_1 = tf.keras.layers.Conv2D(filters=6,
                                                kernel_size=(3, 3), activation='relu',
                                                input_shape=(32, 32, 1))
-        self.average_pool = tf.keras.layers.AveragePooling2D()
+        self.average_pool = tf.keras.layers.AveragePooling2D((3, 3))
         self.conv2d_2 = tf.keras.layers.Conv2D(filters=16,
                                                kernel_size=(3, 3), activation='relu')
         self.flatten = tf.keras.layers.Flatten()
@@ -91,8 +92,9 @@ def test_lenet(runner):
     lenet = LeNet()
     data = np.random.rand(2 * 416 * 416 * 3).astype(np.float32).reshape(2, 416, 416, 3)
     expected = lenet(data)
-    lenet._set_inputs(data)
-    oxml = convert_keras(lenet)
+    if hasattr(lenet, "_set_inputs"):
+        lenet._set_inputs(data)
+    oxml = convert_keras(lenet, input_signature=[tf.TensorSpec([None, None, None, None], tf.float32)])
     assert runner('lenet', oxml, data, expected)
 
 
@@ -234,15 +236,28 @@ def test_tf_where(runner):
     swm = Model()
     const_in = [tf.Variable([2, 4, 6, 8, 10], dtype=tf.int32, name="input")]
     expected = swm(const_in)
-    if hasattr(swm, "_set_input"):
-        swm._set_inputs(const_in)
-    else:
-        swm.inputs_spec = const_in
-    if hasattr(swm, "_set_output"):
-        swm._set_output(expected)
-    else:
-        swm.outputs_spec = expected
-    oxml = convert_keras(swm)
+
+    """
+    for op in concrete_func.graph.get_operations():
+        print("--", op.name)
+        print(op)
+
+    print("***", concrete_func.inputs)
+    print("***", concrete_func.outputs)
+    """
+    run_model = tf.function(swm)
+    concrete_func = run_model.get_concrete_function(tf.TensorSpec([None], tf.int32))
+    model_proto, external_tensor_storage = tf2onnx.convert._convert_common(
+        concrete_func.graph.as_graph_def(),
+        input_names=[i.name for i in concrete_func.inputs],
+        output_names=[i.name for i in concrete_func.outputs],
+        large_model=False,
+        output_path="where_test.onnx",
+    )
+    assert model_proto
+    assert not external_tensor_storage
+
+    oxml = convert_keras(swm, input_signature=[tf.TensorSpec([None], tf.int32)])
     assert runner('where_test', oxml, const_in, expected)
 
 
