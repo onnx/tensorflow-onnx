@@ -16,19 +16,24 @@ echo "==== ONNXRuntime version: $ORT_VERSION"
 echo "==== ONNX version: $ONNX_VERSION"
 
 pip install pytest pytest-cov pytest-runner coverage graphviz requests pyyaml pillow pandas parameterized sympy coloredlogs flatbuffers timeout-decorator
-pip install onnx==$ONNX_VERSION
-pip install onnxruntime==$ORT_VERSION
-pip install "numpy<2"
+pip uninstall -y tensorflow protobuf h5py
+pip install onnx==$ONNX_VERSION onnxruntime==$ORT_VERSION onnxruntime-extensions
 
-pip install onnxruntime-extensions
-pip install "tensorflow-text<=$TF_VERSION"
-
-pip uninstall -y tensorflow
-pip install tensorflow==$TF_VERSION
-pip uninstall -y protobuf
-pip install "protobuf~=3.20"
+if [[ $TF_VERSION == 1.* ]]; then 
+    echo "-- install-3 TF1-KERAS $TF_VERSION"
+    pip install numpy==1.19.0 tensorflow==$TF_VERSION protobug keras h5py
+else 
+    pip uninstall -y protobuf
+    if [[ "$TF_VERSION" != "2.13.0" && "$TF_VERSION" != "2.9.0" ]]; then 
+        echo "-- install-3 TF-KERAS $TF_VERSION"
+        pip install tensorflow==$TF_VERSION tf_keras==$TF_VERSION tensorflow-text
+    else
+        echo "-- install-3 TF $TF_VERSION"
+        pip install tensorflow-text tensorflow==$TF_VERSION protobuf
+    fi
+fi
 
 python setup.py install
 
-echo "----- List all of depdencies:"
+echo "----- List all of dependencies: (tensorflow==$TF_VERSION)"
 pip freeze --all

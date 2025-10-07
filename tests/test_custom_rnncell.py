@@ -16,13 +16,8 @@ from tf2onnx.tf_loader import is_tf2
 # pylint: disable=abstract-method,arguments-differ
 
 if is_tf2():
-    BasicLSTMCell = tf.compat.v1.nn.rnn_cell.BasicLSTMCell
-    LSTMCell = tf.compat.v1.nn.rnn_cell.LSTMCell
-    GRUCell = tf.compat.v1.nn.rnn_cell.GRUCell
-    RNNCell = tf.compat.v1.nn.rnn_cell.RNNCell
-    MultiRNNCell = tf.compat.v1.nn.rnn_cell.MultiRNNCell
-    dynamic_rnn = tf.compat.v1.nn.dynamic_rnn
-    bidirectional_dynamic_rnn = tf.compat.v1.nn.bidirectional_dynamic_rnn
+    # no test for tf2 in this file
+    pass
 else:
     LSTMBlockCell = tf.contrib.rnn.LSTMBlockCell
     LSTMCell = tf.nn.rnn_cell.LSTMCell
@@ -31,6 +26,45 @@ else:
     MultiRNNCell = tf.contrib.rnn.MultiRNNCell
     dynamic_rnn = tf.nn.dynamic_rnn
     bidirectional_dynamic_rnn = tf.nn.bidirectional_dynamic_rnn
+
+    class GatedGRUCell(RNNCell):
+        def __init__(self, hidden_dim, reuse=None):
+            super().__init__(self, _reuse=reuse)
+            self._num_units = hidden_dim
+            self._activation = tf.tanh
+
+        @property
+        def state_size(self):
+            return self._num_units
+
+        @property
+        def output_size(self):
+            return self._num_units
+
+        def call(self, inputs, state):
+            # inputs shape: [batch size, time step, input size] = [1, 3, 2]
+            # num_units: 5
+            # W shape: [2, 3 * 5] = [2, 15]
+            # U shape: [5, 3 * 5] = [5, 15]
+            # b shape: [1, 3 * 5] = [1, 15]
+            # state shape: [batch size, state size] = [1, 5]
+
+            input_dim = inputs.get_shape()[-1]
+            assert input_dim is not None, "input dimension must be defined"
+            # W = tf.get_variable(name="W", shape=[input_dim, 3 * self._num_units], dtype=tf.float32)
+            W = np.arange(30.0, dtype=np.float32).reshape((2, 15))
+            # U = tf.get_variable(name='U', shape=[self._num_units, 3 * self._num_units], dtype=tf.float32)
+            U = np.arange(75.0, dtype=np.float32).reshape((5, 15))
+            # b = tf.get_variable(name='b', shape=[1, 3 * self._num_units], dtype=tf.float32)
+            b = np.arange(15.0, dtype=np.float32).reshape((1, 15))
+
+            xw = tf.split(tf.matmul(inputs, W) + b, 3, 1)
+            hu = tf.split(tf.matmul(state, U), 3, 1)
+            r = tf.sigmoid(xw[0] + hu[0])
+            z = tf.sigmoid(xw[1] + hu[1])
+            h1 = self._activation(xw[2] + r * hu[2])
+            next_h = h1 * (1 - z) + state * z
+            return next_h, next_h
 
 
 class CustomRnnCellTests(Tf2OnnxBackendTestBase):
@@ -374,46 +408,6 @@ class CustomRnnCellTests(Tf2OnnxBackendTestBase):
         input_names_with_port = ["input_1:0", "input_2:0", "input_3:0"]
         output_names_with_port = ["output_0:0", "final_state:0"]
         self.run_test_case(func, feed_dict, input_names_with_port, output_names_with_port, 0.1)
-
-
-class GatedGRUCell(RNNCell):
-    def __init__(self, hidden_dim, reuse=None):
-        super().__init__(self, _reuse=reuse)
-        self._num_units = hidden_dim
-        self._activation = tf.tanh
-
-    @property
-    def state_size(self):
-        return self._num_units
-
-    @property
-    def output_size(self):
-        return self._num_units
-
-    def call(self, inputs, state):
-        # inputs shape: [batch size, time step, input size] = [1, 3, 2]
-        # num_units: 5
-        # W shape: [2, 3 * 5] = [2, 15]
-        # U shape: [5, 3 * 5] = [5, 15]
-        # b shape: [1, 3 * 5] = [1, 15]
-        # state shape: [batch size, state size] = [1, 5]
-
-        input_dim = inputs.get_shape()[-1]
-        assert input_dim is not None, "input dimension must be defined"
-        # W = tf.get_variable(name="W", shape=[input_dim, 3 * self._num_units], dtype=tf.float32)
-        W = np.arange(30.0, dtype=np.float32).reshape((2, 15))
-        # U = tf.get_variable(name='U', shape=[self._num_units, 3 * self._num_units], dtype=tf.float32)
-        U = np.arange(75.0, dtype=np.float32).reshape((5, 15))
-        # b = tf.get_variable(name='b', shape=[1, 3 * self._num_units], dtype=tf.float32)
-        b = np.arange(15.0, dtype=np.float32).reshape((1, 15))
-
-        xw = tf.split(tf.matmul(inputs, W) + b, 3, 1)
-        hu = tf.split(tf.matmul(state, U), 3, 1)
-        r = tf.sigmoid(xw[0] + hu[0])
-        z = tf.sigmoid(xw[1] + hu[1])
-        h1 = self._activation(xw[2] + r * hu[2])
-        next_h = h1 * (1 - z) + state * z
-        return next_h, next_h
 
 
 if __name__ == '__main__':

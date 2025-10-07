@@ -17,7 +17,10 @@ from tf2onnx.tf_loader import is_tf2
 # pylint: disable=invalid-name
 
 if is_tf2():
-    MultiRNNCell = tf.compat.v1.nn.rnn_cell.MultiRNNCell
+    try:
+        MultiRNNCell = getattr(tf.compat.v1.nn.rnn_cell, "MultiRNNCell", None)
+    except ImportError:
+        pass
     dynamic_rnn = tf.compat.v1.nn.dynamic_rnn
     bidirectional_dynamic_rnn = tf.compat.v1.nn.bidirectional_dynamic_rnn
 else:

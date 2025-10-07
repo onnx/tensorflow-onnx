@@ -55,5 +55,5 @@ ENV_TF2ONNX_CATCH_ERRORS = "TF2ONNX_CATCH_ERRORS"
 # Note: opset 7 and opset 8 came out with IR3 but we need IR4 because of PlaceholderWithDefault
 # Refer from https://github.com/onnx/onnx/blob/main/docs/Versioning.md#released-versions
 OPSET_TO_IR_VERSION = {
-    1: 3, 2: 3, 3: 3, 4: 3, 5: 3, 6: 3, 7: 4, 8: 4, 9: 4, 10: 5, 11: 6, 12: 7, 13: 7, 14: 7, 15: 8, 16: 8, 17: 8, 18: 8
+    1: 3, 2: 3, 3: 3, 4: 3, 5: 3, 6: 3, 7: 4, 8: 4, 9: 4, 10: 5, 11: 6, 12: 7, 13: 7, 14: 7, 15: 8, 16: 8, 17: 8, 18: 8, 19: 9, 20: 9, 21: 9, 22: 10
 }

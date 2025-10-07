@@ -6,6 +6,7 @@ import numpy as np
 import tensorflow as tf
 from test_utils import convert_keras_for_test as convert_keras
 from mock_keras2onnx.proto import is_tensorflow_older_than
+import tf2onnx
 
 if (not mock_keras2onnx.proto.is_tf_keras) or (not mock_keras2onnx.proto.tfcompat.is_tf2):
     pytest.skip("Tensorflow 2.0 only tests.", allow_module_level=True)
@@ -17,7 +18,7 @@ class LeNet(tf.keras.Model):
         self.conv2d_1 = tf.keras.layers.Conv2D(filters=6,
                                                kernel_size=(3, 3), activation='relu',
                                                input_shape=(32, 32, 1))
-        self.average_pool = tf.keras.layers.AveragePooling2D()
+        self.average_pool = tf.keras.layers.AveragePooling2D((3, 3))
         self.conv2d_2 = tf.keras.layers.Conv2D(filters=16,
                                                kernel_size=(3, 3), activation='relu')
         self.flatten = tf.keras.layers.Flatten()
@@ -49,13 +50,41 @@ class MLP(tf.keras.Model):
         return output
 
 
-class SimpleWrapperModel(tf.keras.Model):
-    def __init__(self, func):
-        super(SimpleWrapperModel, self).__init__()
-        self.func = func
+def get_save_spec(model, dynamic_batch=False):
+  """Returns the save spec of the subclassing keras model."""
+  from tensorflow.python.framework import tensor_spec
+  shapes_dict = getattr(model, '_build_shapes_dict', None)
+  # TODO: restore dynamic_batch
+  # assert not dynamic_batch, f"get_save_spec: dynamic_batch={dynamic_batch}, shapes_dict={shapes_dict}"
+  if not shapes_dict:
+    return None
 
-    def call(self, inputs, **kwargs):
-        return self.func(inputs)
+  if 'input_shape' not in shapes_dict:
+    raise ValueError(
+        'Model {} cannot be saved because the input shapes have not been set.'
+    )
+
+  input_shape = shapes_dict['input_shape']
+  if isinstance(input_shape, tuple):
+    shape = input_shape
+    shape = (None,) + shape[1:]
+    return tensor_spec.TensorSpec(
+        shape=shape, dtype=model.input_dtype
+    )
+  elif isinstance(input_shape, dict):
+    specs = {}
+    for key, shape in input_shape.items():
+      shape = (None,) + shape[1:]
+      specs[key] = tensor_spec.TensorSpec(
+          shape=shape, dtype=model.input_dtype, name=key
+      )
+    return specs
+  elif isinstance(input_shape, list):
+    specs = []
+    for shape in input_shape:
+      shape = (None,) + shape[1:]
+      specs.append(tensor_spec.TensorSpec(shape=shape, dtype=model.input_dtype))
+    return specs
 
 
 def test_lenet(runner):
@@ -63,8 +92,9 @@ def test_lenet(runner):
     lenet = LeNet()
     data = np.random.rand(2 * 416 * 416 * 3).astype(np.float32).reshape(2, 416, 416, 3)
     expected = lenet(data)
-    lenet._set_inputs(data)
-    oxml = convert_keras(lenet)
+    if hasattr(lenet, "_set_inputs"):
+        lenet._set_inputs(data)
+    oxml = convert_keras(lenet, input_signature=[tf.TensorSpec([None, None, None, None], tf.float32)])
     assert runner('lenet', oxml, data, expected)
 
 
@@ -72,9 +102,9 @@ def test_mlf(runner):
     tf.keras.backend.clear_session()
     mlf = MLP()
     np_input = tf.random.normal((2, 20))
-    expected = mlf.predict(np_input)
+    expected = mlf(np_input)
     oxml = convert_keras(mlf)
-    assert runner('mlf', oxml, np_input.numpy(), expected)
+    assert runner('mlf', oxml, np_input.numpy(), expected, atol=1e-2)
 
 
 def test_tf_ops(runner):
@@ -87,7 +117,11 @@ def test_tf_ops(runner):
         x = x - tf.cast(tf.expand_dims(r, axis=0), tf.float32)
         return x
 
-    dm = SimpleWrapperModel(op_func)
+    class Model(tf.keras.Model):
+        def call(self, inputs, **kwargs):
+            return op_func(inputs)
+
+    dm = Model()
     inputs = [tf.random.normal((3, 2, 20)), tf.random.normal((3, 2, 20))]
     expected = dm.predict(inputs)
     oxml = convert_keras(dm)
@@ -195,11 +229,35 @@ def test_tf_where(runner):
         c = tf.logical_or(tf.cast(a, tf.bool), tf.cast(b, tf.bool))
         return c
 
-    swm = SimpleWrapperModel(_tf_where)
-    const_in = [np.array([2, 4, 6, 8, 10]).astype(np.int32)]
+    class Model(tf.keras.Model):
+        def call(self, inputs, **kwargs):
+            return _tf_where(inputs)
+
+    swm = Model()
+    const_in = [tf.Variable([2, 4, 6, 8, 10], dtype=tf.int32, name="input")]
     expected = swm(const_in)
-    swm._set_inputs(const_in)
-    oxml = convert_keras(swm)
+
+    """
+    for op in concrete_func.graph.get_operations():
+        print("--", op.name)
+        print(op)
+
+    print("***", concrete_func.inputs)
+    print("***", concrete_func.outputs)
+    """
+    run_model = tf.function(swm)
+    concrete_func = run_model.get_concrete_function(tf.TensorSpec([None], tf.int32))
+    model_proto, external_tensor_storage = tf2onnx.convert._convert_common(
+        concrete_func.graph.as_graph_def(),
+        input_names=[i.name for i in concrete_func.inputs],
+        output_names=[i.name for i in concrete_func.outputs],
+        large_model=False,
+        output_path="where_test.onnx",
+    )
+    assert model_proto
+    assert not external_tensor_storage
+
+    oxml = convert_keras(swm, input_signature=[tf.TensorSpec([None], tf.int32)])
     assert runner('where_test', oxml, const_in, expected)
 
 

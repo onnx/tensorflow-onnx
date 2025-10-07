@@ -24,30 +24,35 @@ runs:
           python -m pip install --upgrade pip
           pip install onnxconverter-common
           pip install onnx==${{ inputs.onnx_version }}
-          pip install h5py==3.7.0
           pip install parameterized
           pip install timeout-decorator
           pip install coloredlogs flatbuffers
-          pip install tensorflow==${{ inputs.tf_version }}
           pip install pytest pytest-cov pytest-runner
           pip install onnxruntime==${{ inputs.ort_version }}
-          pip uninstall -y protobuf
-          pip install "protobuf~=3.20"
+          pip uninstall -y protobuf h5py tensorflow
           if [[ ${{ inputs.tf_version }} == 1.* ]]; then 
-              pip install numpy==1.19.0
+              echo "-- install-2 TF1-KERAS ${{ inputs.tf_version }}"
+              pip install numpy==1.19.0 tensorflow==${{ inputs.tf_version }} protobuf keras h5py
           else 
-              pip install "numpy<2"
+              if [[ "${{ inputs.tf_version }}" != "2.13.0" && "${{ inputs.tf_version }}" != "2.9.0" ]]; then 
+                echo "-- install-2 TF-KERAS ${{ inputs.tf_version }}"
+                pip install tf_keras==${{ inputs.tf_version }} tensorflow==${{ inputs.tf_version }} h5py protobuf
+              else
+                echo "-- install-2 TF ${{ inputs.tf_version }}"
+                pip install protobuf tensorflow==${{ inputs.tf_version }} h5py
+              fi
           fi
 
           pip install -e .
 
-          echo "----- List all of depdencies:"
+          echo "----- List all of dependencies: (tensorflow==${{ inputs.tf_version }})"
           pip freeze --all
 
     - name: Run keras_unit_test (Linux)
       shell: bash
       if: runner.os == 'Linux'
       run: |
+          export TF_USE_LEGACY_KERAS=True
           python -c "import onnxruntime"
           python -c "import onnxconverter_common"
           pytest tests/keras2onnx_unit_tests --doctest-modules --junitxml=junit/test-results.xml

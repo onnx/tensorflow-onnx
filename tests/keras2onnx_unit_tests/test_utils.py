@@ -9,6 +9,7 @@ import mock_keras2onnx
 from mock_keras2onnx.proto import keras, is_keras_older_than
 from mock_keras2onnx.proto.tfcompat import is_tf2
 from packaging.version import Version
+import tensorflow as tf
 from tf2onnx.keras2onnx_api import convert_keras, get_maximum_opset_supported
 import time
 import json
@@ -19,7 +20,7 @@ import urllib
 ORT_OPSET_VERSION = {
     "1.6.0": 13, "1.7.0": 13, "1.8.0": 14, "1.9.0": 15, "1.10.0": 15, "1.11.0": 16,
     "1.12.0": 17, "1.13.0": 17, "1.14.0": 18, "1.15.0": 18, "1.16.0": 18, "1.17.0": 18,
-    "1.18.0": 18, "1.19.0": 18, "1.20.0": 18,
+    "1.18.0": 18, "1.19.0": 18, "1.20.0": 18, "1.21.0": 18, "1.22.0": 20,
 }
 
 working_path = os.path.abspath(os.path.dirname(__file__))
@@ -207,7 +208,7 @@ def run_onnx_runtime(case_name, onnx_model, data, expected, model_files, rtol=1.
         # to avoid too complicated test code, we restrict the input name in Keras test cases must be
         # in alphabetical order. It's always true unless there is any trick preventing that.
         feed = zip(sorted(i_.name for i_ in input_names), data)
-        feed_input = dict(feed)
+        feed_input = {k: (v.numpy() if hasattr(v, "numpy") else v) for k, v in feed}
     actual = sess.run(None, feed_input)
     if compare_perf:
         count = 10
@@ -241,8 +242,8 @@ def run_onnx_runtime(case_name, onnx_model, data, expected, model_files, rtol=1.
 
     if not res:
         for n_ in range(len(expected)):
-            expected_list = expected[n_].flatten()
-            actual_list = actual[n_].flatten()
+            expected_list = tf.reshape(expected[n_], (-1,))
+            actual_list = tf.reshape(actual[n_], (-1,))
             print_mismatches(case_name, n_, expected_list, actual_list, rtol, atol)
 
     return res

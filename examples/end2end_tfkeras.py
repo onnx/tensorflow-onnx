@@ -8,11 +8,9 @@ discrepencies. Inferencing time is also compared between
 *onnxruntime*, *tensorflow* and *tensorflow.lite*.
 """
 from onnxruntime import InferenceSession
-import os
 import subprocess
 import timeit
 import numpy as np
-import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers, Input
 

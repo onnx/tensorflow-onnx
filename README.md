@@ -19,10 +19,10 @@ The common issues we run into we try to document here [Troubleshooting Guide](Tr
 
 <br/>
 
-| Build Type | OS | Python | TensorFlow | ONNX opset |
-| ---        | -  | ---    | ---        | ---        |
-| Unit Test - Basic | Linux, Windows | 3.7-3.12 | 1.15, 2.9-2.15 | 14-18 |
-| Unit Test - Full | Linux, Windows | 3.7-3.12 | 1.15, 2.9-2.15 | 14-18 | 
+| Build Type | OS | Python | TensorFlow | ONNX opset | Status |
+| ---        | ---    | ---    | ---        | ---        | ---    |
+| Unit Test - Basic | Linux, Windows | 3.7-3.12 | 1.15, 2.9-2.15 | 14-18 | [![Build Status](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_apis/build/status/unit_test?branchName=main)](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_build/latest?definitionId=16&branchName=main) |
+| Unit Test - Full | Linux, Windows | 3.7-3.12 | 1.15, 2.9-2.15 | 14-18 | [![Build Status](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_apis/build/status/unit_test-matrix?branchName=main)](https://dev.azure.com/tensorflow-onnx/tensorflow-onnx/_build/latest?definitionId=18&branchName=main) | |
 <br/>
 
 ## Supported Versions
@@ -46,7 +46,7 @@ You can install tf2onnx on top of tf-1.x or tf-2.x.
 
 ### Python
 
-We support Python ```3.7-3.12```.
+We support Python ```3.8-3.12```.
 
 ## Prerequisites
 
@@ -335,8 +335,6 @@ model_proto, external_tensor_storage = tf2onnx.convert.from_keras(model,
     Returns:
         An ONNX model_proto and an external_tensor_storage dict.
 ```
-
-See [tutorials/keras-resnet50.ipynb](tutorials/keras-resnet50.ipynb) for an end to end example.
 
 ### from_function (tf-2.0 and newer)
 ```
