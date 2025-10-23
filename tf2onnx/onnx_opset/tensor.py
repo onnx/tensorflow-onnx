@@ -2300,15 +2300,24 @@ class ReverseV2:
                 const_axis_name = utils.make_name(f'const_{axis}')
                 const_axis = ctx.make_const(name=const_axis_name, np_val=np.array([axis], dtype=np.int64))
 
-                # Add a Constant node (seq_len) for ReverseSequence.
-                # Index 1 for the shape should not return 0, since rank(input) >=2
-                input_shape = ctx.make_node("Shape", [inputs[-1]], op_name_scope=rv2_node_name)
-                batch_size = ctx.make_node("Gather", [input_shape.output[0], const_one.output[0]],
-                                           op_name_scope=rv2_node_name)
-                axis_dim = ctx.make_node("Gather", [input_shape_node.output[0], const_axis.output[0]],
-                                         op_name_scope=rv2_node_name)
-                seq_array = ctx.make_node("Expand", [axis_dim.output[0], batch_size.output[0]])
-                inputs.append(seq_array.output[0])
+                # Add sequence_lens as ReverseSequence input
+                has_sequence_lens = node.get_attr_value("has_sequence_lens", False)
+                if not has_sequence_lens:
+                    # Add a Constant node (seq_len) for ReverseSequence.
+                    # Index 1 for the shape should not return 0, since rank(input) >=2
+                    input_shape = ctx.make_node("Shape", [inputs[-1]], op_name_scope=rv2_node_name)
+                    batch_size = ctx.make_node("Gather", [input_shape.output[0], const_one.output[0]],
+                                               op_name_scope=rv2_node_name)
+                    axis_dim = ctx.make_node("Gather", [input_shape_node.output[0], const_axis.output[0]],
+                                             op_name_scope=rv2_node_name)
+                    seq_array = ctx.make_node("Expand", [axis_dim.output[0], batch_size.output[0]])
+                    inputs.append(seq_array.output[0])
+                else:
+                    # masked backward LSTM:
+                    # sequence_lens is appended to ReverseV2's input by lstm_tf2_rewriter
+                    # to keep tensor post-padded after reverse
+                    seq_lens_casted = ctx.make_node("Cast", [node.input[-1]], attr={'to': TensorProto.INT64}).output[0]
+                    inputs.append(seq_lens_casted)
 
                 # Add a ReverseSequence node.
 

@@ -817,5 +817,164 @@ class LSTMTests(Tf2OnnxBackendTestBase):
             return tf.identity(y[0], name="output")
         self.run_test_case(func, {"input:0": x_val}, [], ["output:0"], rtol=1e-05, atol=1e-06)
 
+    @check_tf_min_version("2.0")
+    @skip_tf_versions("2.1", "Bug in TF 2.1")
+    def test_keras_masked_lstm_embedding_unidirectional(self):
+        for go_backwards in [True, False]:
+            timesteps = 4
+            # Note: masked LSTM only support post-padded input after conversion
+            # test case sequence_lens = [4, 2, 0]
+            x_val = np.array([
+                [1, 2, 3, 4],
+                [5, 6, 0, 0],
+                [0, 0, 0, 0]
+            ], dtype=np.int32)
+
+            model_in = tf.keras.layers.Input((timesteps,), dtype="int32")
+            x_embedding = tf.keras.layers.Embedding(
+                input_dim=10,
+                output_dim=5,
+                mask_zero=True,
+                embeddings_initializer=tf.random_uniform_initializer(0.0, 1.0, seed=41),
+            )(model_in)
+
+            # RNN layer inherits the mask propagated from above embedding layer
+            model_out = tf.keras.layers.LSTM(
+                units=5,
+                go_backwards=go_backwards,
+                return_state=True,
+                kernel_initializer=tf.random_uniform_initializer(0.0, 1.0, seed=42),
+                bias_initializer=tf.random_uniform_initializer(0.0, 1.0, seed=43),
+                recurrent_initializer=tf.random_uniform_initializer(0.0, 1.0, seed=44),
+            )(x_embedding)
+            model = tf.keras.models.Model(inputs=model_in, outputs=model_out)
+
+            def func(x):
+                y = model(x)
+                # skiping output Y: https://github.com/microsoft/onnxruntime/issues/12492
+                return(tf.identity(y[1], name="output_yh"),
+                       tf.identity(y[2], name="output_yc"))
+
+            output_list = ["output_yh:0", "output_yc:0"]
+            self.run_test_case(func, {"input:0": x_val}, [], output_list, rtol=1e-05, atol=1e-06)
+
+    @check_tf_min_version("2.0")
+    @skip_tf_versions("2.1", "Bug in TF 2.1")
+    def test_keras_masked_lstm_embedding_bidirectional(self):
+        timesteps = 4
+        # Note: masked LSTM only support post-padded input after conversion
+        # test case sequence_lens = [4, 2, 0]
+        x_val = np.array([
+            [1, 2, 3, 4],
+            [5, 6, 0, 0],
+            [0, 0, 0, 0]
+        ], dtype=np.int32)
+
+        model_in = tf.keras.layers.Input((timesteps,), dtype="int32")
+        x_embedding = tf.keras.layers.Embedding(
+            input_dim=10,
+            output_dim=5,
+            mask_zero=True,
+            embeddings_initializer=tf.random_uniform_initializer(0.0, 1.0, seed=41),
+        )(model_in)
+
+        # RNN layer inherits the mask propagated from above embedding layer
+        lstm_layer = tf.keras.layers.LSTM(
+            units=5,
+            go_backwards=False,
+            return_state=True,
+            kernel_initializer=tf.random_uniform_initializer(0.0, 1.0, seed=42),
+            bias_initializer=tf.random_uniform_initializer(0.0, 1.0, seed=43),
+            recurrent_initializer=tf.random_uniform_initializer(0.0, 1.0, seed=44),
+        )
+        model_out = tf.keras.layers.Bidirectional(lstm_layer)(x_embedding)
+        model = tf.keras.models.Model(inputs=model_in, outputs=model_out)
+
+        def func(x):
+            y = model(x)
+            # skiping output Y: https://github.com/microsoft/onnxruntime/issues/12492
+            return(tf.identity(y[1], name="output_yh_f"),
+                   tf.identity(y[2], name="output_yc_f"),
+                   tf.identity(y[3], name="output_yh_r"),
+                   tf.identity(y[4], name="output_yc_r"))
+
+        output_list = ["output_yh_f:0", "output_yc_f:0", "output_yh_r:0", "output_yc_r:0"]
+        self.run_test_case(func, {"input:0": x_val}, [], output_list, rtol=1e-05, atol=1e-06,
+                           require_lstm_count=2)
+
+    @check_tf_min_version("2.0")
+    @skip_tf_versions("2.1", "Bug in TF 2.1")
+    def test_keras_masked_lstm_unidirectional(self):
+        for go_backwards in [True, False]:
+            batch_size, timesteps, feat = 3, 4, 5
+            in_shape = (timesteps, feat)
+            x_val = np.random.uniform(size=[batch_size, timesteps, feat]).astype(np.float32)
+            # Note: masked LSTM only support post-padded input after conversion
+            # test case sequence_lens = [4, 2, 0]
+            x_val[1, 2:, :] = 0.
+            x_val[2, :, :] = 0.
+
+            model_in = tf.keras.layers.Input(shape=in_shape, dtype="float32")
+            x_masked = tf.keras.layers.Masking(mask_value=0.)(model_in)
+
+            # RNN layer inherits the mask propagated from above mask layer
+            model_out = tf.keras.layers.LSTM(
+                units=5,
+                go_backwards=go_backwards,
+                return_state=True,
+                kernel_initializer=tf.random_uniform_initializer(0.0, 1.0, seed=42),
+                bias_initializer=tf.random_uniform_initializer(0.0, 1.0, seed=43),
+                recurrent_initializer=tf.random_uniform_initializer(0.0, 1.0, seed=44),
+            )(x_masked)
+            model = tf.keras.models.Model(inputs=model_in, outputs=model_out)
+
+            def func(x):
+                y = model(x)
+                # skiping output Y: https://github.com/microsoft/onnxruntime/issues/12492
+                return(tf.identity(y[1], name="output_yh"),
+                       tf.identity(y[2], name="output_yc"))
+
+            output_list = ["output_yh:0", "output_yc:0"]
+            self.run_test_case(func, {"input:0": x_val}, [], output_list, rtol=1e-05, atol=1e-06)
+
+    @check_tf_min_version("2.0")
+    @skip_tf_versions("2.1", "Bug in TF 2.1")
+    def test_keras_masked_lstm_bidirectional(self):
+        batch_size, timesteps, feat = 3, 4, 5
+        in_shape = (timesteps, feat)
+        x_val = np.random.uniform(size=[batch_size, timesteps, feat]).astype(np.float32)
+        # Note: masked LSTM only support post-padded input after conversion
+        # test case sequence_lens = [4, 2, 0]
+        x_val[1, 2:, :] = 0.
+        x_val[2, :, :] = 0.
+
+        model_in = tf.keras.layers.Input(shape=in_shape, dtype="float32")
+        x_masked = tf.keras.layers.Masking(mask_value=0.)(model_in)
+
+        # RNN layer inherits the mask propagated from above mask layer
+        lstm_layer = tf.keras.layers.LSTM(
+            units=5,
+            go_backwards=False,
+            return_state=True,
+            kernel_initializer=tf.random_uniform_initializer(0.0, 1.0, seed=42),
+            bias_initializer=tf.random_uniform_initializer(0.0, 1.0, seed=43),
+            recurrent_initializer=tf.random_uniform_initializer(0.0, 1.0, seed=44),
+        )
+        model_out = tf.keras.layers.Bidirectional(lstm_layer)(x_masked)
+        model = tf.keras.models.Model(inputs=model_in, outputs=model_out)
+
+        def func(x):
+            y = model(x)
+            # skiping output Y: https://github.com/microsoft/onnxruntime/issues/12492
+            return (tf.identity(y[1], name="output_yh_f"),
+                    tf.identity(y[2], name="output_yc_f"),
+                    tf.identity(y[3], name="output_yh_r"),
+                    tf.identity(y[4], name="output_yc_r"))
+
+        output_list = ["output_yh_f:0", "output_yc_f:0", "output_yh_r:0", "output_yc_r:0"]
+        self.run_test_case(func, {"input:0": x_val}, [], output_list, rtol=1e-05, atol=1e-06,
+                           require_lstm_count=2)
+
+
 if __name__ == '__main__':
     unittest_main()
