@@ -71,7 +71,13 @@ class CommonFFTOp:
         # Perform DFT on the last dimension (signal dimension)
         # axis = -2 (signal dimension, -1 is reserved for complex representation)
         if fft_length_tensor is not None:
-            dft_inputs = [input_expanded.output[0], fft_length_tensor]
+            # Reshape fft_length to ensure it's a scalar (rank 0 tensor) as required by DFT
+            empty_shape = ctx.make_const(name=utils.make_name('empty_shape'),
+                                        np_val=np.array([], dtype=np.int64))
+            fft_length_scalar = ctx.make_node('Reshape',
+                                             [fft_length_tensor, empty_shape.name],
+                                             name=utils.make_name('fft_length_scalar'))
+            dft_inputs = [input_expanded.output[0], fft_length_scalar.output[0]]
         else:
             dft_inputs = [input_expanded.output[0]]
 
@@ -447,6 +453,12 @@ class CommonFFT2DOp(CommonFFTOp):
         input_tensor = node.input[0]
         fft_length_tensor = node.input[1]
 
+        # Cast fft_length to int64 to ensure compatibility
+        fft_length_tensor_int64 = ctx.make_node('Cast', [fft_length_tensor],
+                                                attr={'to': onnx_pb.TensorProto.INT64},
+                                                name=utils.make_name('fft_length_cast'))
+        fft_length_tensor = fft_length_tensor_int64.output[0]
+
         # Get input properties
         input_shape = ctx.get_shape(input_tensor)
         input_dtype = ctx.get_dtype(input_tensor)
@@ -495,17 +507,49 @@ class CommonFFT2DOp(CommonFFTOp):
         width_fft_length = ctx.make_node('Gather', [fft_length_tensor, one_const.name],
                                         attr={'axis': 0}, name=utils.make_name('width_fft_length'))
 
+        # Reshape fft_length values to ensure they're scalars (rank 0 tensors) as required by DFT
+        empty_shape = ctx.make_const(name=utils.make_name('empty_shape'),
+                                    np_val=np.array([], dtype=np.int64))
+        height_fft_length_scalar = ctx.make_node('Reshape',
+                                                [height_fft_length.output[0], empty_shape.name],
+                                                name=utils.make_name('height_fft_length_scalar'))
+        width_fft_length_scalar = ctx.make_node('Reshape',
+                                               [width_fft_length.output[0], empty_shape.name],
+                                               name=utils.make_name('width_fft_length_scalar'))
+
         # Perform DFT on the second-to-last dimension (height)
-        # axis = -2 (height dimension)
-        dft_height = ctx.make_node('DFT', [current_input, height_fft_length.output[0]],
-                                  attr={'axis': -2, 'onesided': 1},
+        # Use onesided=0 for intermediate transforms
+        # axis = -3 (height dimension)
+        dft_height = ctx.make_node('DFT', [current_input, height_fft_length_scalar.output[0]],
+                                  attr={'axis': -3, 'onesided': 0},
                                   name=utils.make_name('dft_height'))
 
         # Perform DFT on the last dimension (width)
-        # axis = -2 (width dimension, which becomes -2 after the previous DFT)
-        dft_result = ctx.make_node('DFT', [dft_height.output[0], width_fft_length.output[0]],
+        # Use onesided=1 for the second transform to get the one-sided FFT result
+        # axis = -2 (width dimension)
+        dft_width = ctx.make_node('DFT', [dft_height.output[0], width_fft_length_scalar.output[0]],
                                   attr={'axis': -2, 'onesided': 1},
                                   name=utils.make_name('dft_width'))
+
+        # The DFT output has shape [..., height, width//2+1, 2] where last dim is [real, imag]
+        # We only need the real part (index 0) of the complex dimension
+        zero_const_slice = ctx.make_const(name=utils.make_name('zero_slice'),
+                                         np_val=np.array([0], dtype=np.int64))
+        one_const_end = ctx.make_const(name=utils.make_name('one_const_end'),
+                                      np_val=np.array([1], dtype=np.int64))
+        minus_one_axis = ctx.make_const(name=utils.make_name('minus_one_axis'),
+                                       np_val=np.array([-1], dtype=np.int64))
+
+        # Slice to get real part: dft_width[..., 0:1]
+        dft_real = ctx.make_node('Slice',
+                                [dft_width.output[0], zero_const_slice.name, one_const_end.name, minus_one_axis.name],
+                                name=utils.make_name('dft_real_part'))
+
+        # Squeeze the last dimension to remove the complex dimension
+        dft_result = GraphBuilder(ctx).make_squeeze(
+            {'data': dft_real.output[0], 'axes': [-1]},
+            name=utils.make_name('dft_result_squeezed'),
+            return_node=True)
 
         # Remove the original node and replace with DFT result
         ctx.remove_node(node.name)
