@@ -4931,7 +4931,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
     @check_opset_min_version(11, "Det")
-    @unittest.skip("unclear how this is called in tf-2, fix later")
+    
     def test_determinant(self):
         x_val = np.array([1., 2., 3., 4., 1., 2.,
                           2., 1., 1., 3., 3., 1.,
@@ -4939,7 +4939,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
                           2., 1., 1., 3., 3., 1.],
                          dtype=np.float32).reshape((1, 2, 3, 2, 2))
         def func(x):
-            x_ = tf.matrix_determinant(x)
+            x_ = tf.linalg.det(x)
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
