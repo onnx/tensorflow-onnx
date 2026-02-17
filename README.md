@@ -6,7 +6,7 @@ SPDX-License-Identifier: Apache-2.0
 
 # tf2onnx - Convert TensorFlow, Keras, Tensorflow.js and Tflite models to ONNX.
 
-tf2onnx converts TensorFlow (tf-1.x or tf-2.x), keras, tensorflow.js and tflite models to ONNX via command 
+tf2onnx converts TensorFlow (tf-2.x), keras, tensorflow.js and tflite models to ONNX via command
 line or python api.
 
 __Note: tensorflow.js support was just added. While we tested it with many tfjs models from tfhub, it should be considered experimental.__
@@ -21,8 +21,8 @@ The common issues we run into we try to document here [Troubleshooting Guide](Tr
 
 | Build Type | OS | Python | TensorFlow | ONNX opset |
 | ---        | -  | ---    | ---        | ---        |
-| Unit Test - Basic | Linux, Windows | 3.7-3.12 | 1.15, 2.9-2.15 | 14-18 |
-| Unit Test - Full | Linux, Windows | 3.7-3.12 | 1.15, 2.9-2.15 | 14-18 | 
+| Unit Test - Basic | Linux, Windows | 3.10-3.12 | 2.9-2.15 | 14-18 |
+| Unit Test - Full | Linux, Windows | 3.10-3.12 | 2.9-2.15 | 14-18 | 
 <br/>
 
 ## Supported Versions
@@ -38,15 +38,11 @@ If you want the graph to be generated with a specific opset, use ```--opset``` i
 
 ### TensorFlow
 
-We support ```tf-1.x graphs``` and ```tf-2.x```. To keep our test matrix manageable we test tf2onnx running on top of ```tf-1.15 or better```.
-
-When running under tf-2.x tf2onnx will use the tensorflow V2 controlflow.
-
-You can install tf2onnx on top of tf-1.x or tf-2.x.
+We support ```tf-2.x```. To keep our test matrix manageable we test tf2onnx running on top of ```tf-2.9 or better```.
 
 ### Python
 
-We support Python ```3.7-3.12```.
+We support Python ```3.10-3.12```.
 
 ## Prerequisites
 
