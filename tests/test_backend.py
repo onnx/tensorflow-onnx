@@ -7,9 +7,10 @@ import os
 import unittest
 from itertools import product
 
+from packaging.version import Version
+
 import numpy as np
 from numpy.testing import assert_almost_equal
-from packaging.version import Version
 import tensorflow as tf
 
 from tensorflow.python.ops import lookup_ops
