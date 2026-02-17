@@ -1,0 +1,59 @@
+# SPDX-License-Identifier: Apache-2.0
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tf2onnx"
+dynamic = ["version"]
+description = "Tensorflow to ONNX converter"
+license = "Apache-2.0"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+    { name = "ONNX", email = "onnx-technical-discuss@lists.lfaidata.foundation" },
+]
+dependencies = [
+    "numpy>=1.14.1",
+    "onnx>=1.4.1",
+    "requests",
+    "six",
+    "flatbuffers>=1.12",
+    "protobuf~=3.20",
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Education",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Mathematics",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+[project.optional-dependencies]
+test = [
+    "graphviz",
+    "parameterized",
+    "pytest",
+    "pytest-cov",
+    "pyyaml",
+    "timeout-decorator",
+]
+
+[project.urls]
+Homepage = "https://github.com/onnx/tensorflow-onnx"
+
+[tool.setuptools.packages.find]
+
+[tool.pytest.ini_options]
+addopts = "--cov=tf2onnx"
+norecursedirs = ["tests/keras2onnx_applications", "tests/keras2onnx_unit_tests"]
