@@ -23,12 +23,9 @@ pip install "numpy<2"
 pip install onnxruntime-extensions
 pip install "tensorflow-text<=$TF_VERSION"
 
-pip uninstall -y tensorflow
 pip install tensorflow==$TF_VERSION
-pip uninstall -y protobuf
-pip install "protobuf~=3.20"
 
-python setup.py install
+pip install -e .
 
 echo "----- List all of depdencies:"
 pip freeze --all

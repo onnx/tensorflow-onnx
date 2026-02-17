@@ -24,8 +24,6 @@ runs:
           python -m pip install --upgrade pip
           pip install onnxconverter-common
           pip install onnx==${{ inputs.onnx_version }}
-          pip uninstall -y protobuf
-          pip install "protobuf~=3.20"
           pip install h5py==3.7.0
           pip install parameterized
           pip install timeout-decorator
@@ -39,7 +37,7 @@ runs:
           git clone https://github.com/matterport/Mask_RCNN
           cd Mask_RCNN
           pip install -r requirements.txt
-          python setup.py install
+          pip install .
           cd ..
           pip install matplotlib
           git clone https://github.com/qqwweee/keras-yolo3
@@ -49,17 +47,8 @@ runs:
           pip install git+https://github.com/qubvel/efficientnet
           pip install keras-self-attention
           pip install pytest pytest-cov pytest-runner
-
-          if [[ ${{ inputs.tf_version }} == 1.* ]]; then 
-              pip install keras==2.3.1
-              pip install transformers==4.2.0
-              pip uninstall -y h5py
-              pip install h5py==2.9.0
-              pip install numpy==1.19.0
-          else 
-              pip install transformers
-              pip install "numpy<2"
-          fi
+          pip install transformers
+          pip install "numpy<2"
 
           pip install -e .
 

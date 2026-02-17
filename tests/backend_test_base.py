@@ -110,28 +110,33 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
 
     def assert_results_equal(self, expected, actual, rtol, atol, mtol=None,
                              check_value=True, check_shape=True, check_dtype=True):
-        for expected_val, actual_val in zip(expected, actual):
+        for idx, (expected_val, actual_val) in enumerate(zip(expected, actual)):
             if check_value:
                 if expected_val.dtype == object:
                     # TFLite pads strings with nul bytes
                     decode = np.vectorize(lambda x: x.replace(b'\x00', b'').decode('UTF-8'))
                     expected_val_str = decode(expected_val)
-                    self.assertAllEqual(expected_val_str, actual_val)
+                    self.assertAllEqual(expected_val_str, actual_val,
+                                        err_msg=f"output {idx}: dtype={expected_val.dtype}, shape={expected_val.shape}")
                 elif expected_val.dtype.kind == 'U':
-                    self.assertAllEqual(expected_val, actual_val)
+                    self.assertAllEqual(expected_val, actual_val,
+                                        err_msg=f"output {idx}: dtype={expected_val.dtype}, shape={expected_val.shape}")
                 else:
                     if mtol is not None:
                         expected_val = np.minimum(expected_val, mtol)
                         expected_val = np.maximum(expected_val, -mtol)
                         actual_val = np.minimum(actual_val, mtol)
                         actual_val = np.maximum(actual_val, -mtol)
-                    self.assertAllClose(expected_val, actual_val, rtol=rtol, atol=atol)
+                    self.assertAllClose(expected_val, actual_val, rtol=rtol, atol=atol,
+                                        err_msg=f"output {idx}: dtype={expected_val.dtype}, shape={expected_val.shape}")
             if check_dtype:
-                self.assertEqual(expected_val.dtype, actual_val.dtype)
+                self.assertEqual(expected_val.dtype, actual_val.dtype,
+                                 f"output {idx}: expected dtype {expected_val.dtype}, got {actual_val.dtype}")
             # why need shape checke: issue when compare [] with scalar
             # https://github.com/numpy/numpy/issues/11071
             if check_shape:
-                self.assertEqual(expected_val.shape, actual_val.shape)
+                self.assertEqual(expected_val.shape, actual_val.shape,
+                                 f"output {idx}: expected shape {expected_val.shape}, got {actual_val.shape}")
 
     def freeze_and_run_tf(self, func, feed_dict, outputs, as_session, premade_placeholders, large_model):
         np.random.seed(1)  # Make it reproducible.
