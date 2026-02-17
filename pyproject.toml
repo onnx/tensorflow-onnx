@@ -57,3 +57,24 @@ Homepage = "https://github.com/onnx/tensorflow-onnx"
 [tool.pytest.ini_options]
 addopts = "--cov=tf2onnx"
 norecursedirs = ["tests/keras2onnx_applications", "tests/keras2onnx_unit_tests"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+
+[tool.ruff.lint]
+select = [
+    "E",  # pycodestyle errors
+    "F",  # pyflakes
+    "W",  # pycodestyle warnings
+    "I",  # isort
+]
+ignore = [
+    "E501",  # line too long (let formatter handle it)
+    "E741",  # ambiguous variable name (too many in codebase)
+    "F841",  # local variable assigned but never used (pylint didn't enforce)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tf2onnx/version.py" = ["E", "F", "W", "I"]
+"tf2onnx/tflite*" = ["E", "F", "W", "I"]
