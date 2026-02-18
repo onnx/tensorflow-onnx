@@ -439,6 +439,40 @@ def _from_keras_tf1(model, opset=None, custom_ops=None, custom_op_handlers=None,
         return model_proto, external_tensor_storage
 
 
+def _get_concrete_function(model, input_signature):
+    """Get a concrete function from a Keras model, with fallbacks for different TF versions."""
+    # Try trace_model_call first (works for TF < 2.16)
+    try:
+        from tensorflow.python.keras.saving import saving_utils as _saving_utils  # pylint: disable=import-outside-toplevel
+        function = _saving_utils.trace_model_call(model, input_signature)
+        try:
+            return function.get_concrete_function()
+        except TypeError as e:
+            # Legacy keras models don't accept the training arg tf provides so we hack around it
+            if "got an unexpected keyword argument 'training'" not in str(e):
+                raise e
+            model_call = model.call
+            def wrap_call(*args, training=False, **kwargs):
+                return model_call(*args, **kwargs)
+            model.call = wrap_call
+            function = _saving_utils.trace_model_call(model, input_signature)
+            try:
+                return function.get_concrete_function()
+            finally:
+                model.call = model_call
+    except (ImportError, AttributeError):
+        # TF 2.16+ removed trace_model_call / _get_save_spec; fall back to tf.function
+        pass
+
+    # Fallback: derive input signature from the model and use tf.function
+    if input_signature is None:
+        input_signature = [tf.TensorSpec(shape=inp.shape, dtype=inp.dtype) for inp in model.inputs]
+    @tf.function(input_signature=input_signature)
+    def model_fn(*args):
+        return model(*args, training=False)
+    return model_fn.get_concrete_function()
+
+
 def from_keras(model, input_signature=None, opset=None, custom_ops=None, custom_op_handlers=None,
                custom_rewriter=None, inputs_as_nchw=None, outputs_as_nchw=None, extra_opset=None, shape_override=None,
                target=None, large_model=False, output_path=None, optimizers=None):
@@ -470,36 +504,8 @@ def from_keras(model, input_signature=None, opset=None, custom_ops=None, custom_
                                outputs_as_nchw, extra_opset, shape_override, target, large_model, output_path)
 
     old_out_names = _rename_duplicate_keras_model_names(model)
-    from tensorflow.python.keras.saving import saving_utils as _saving_utils # pylint: disable=import-outside-toplevel
 
-    # let tensorflow do the checking if model is a valid model
-    function = _saving_utils.trace_model_call(model, input_signature)
-    try:
-        concrete_func = function.get_concrete_function()
-    except TypeError as e:
-        # Legacy keras models don't accept the training arg tf provides so we hack around it
-        if "got an unexpected keyword argument 'training'" not in str(e):
-            raise e
-        model_call = model.call
-        def wrap_call(*args, training=False, **kwargs):
-            return model_call(*args, **kwargs)
-        model.call = wrap_call
-        function = _saving_utils.trace_model_call(model, input_signature)
-        try:
-            # Legacy keras get make TF erroneously enter eager mode when it should be making symbolic tensors
-            import tensorflow_core  # pylint: disable=import-outside-toplevel
-            old_get_learning_phase = tensorflow_core.python.keras.backend.learning_phase
-            tensorflow_core.python.keras.backend.learning_phase = \
-                tensorflow_core.python.keras.backend.symbolic_learning_phase
-        except ImportError:
-            old_get_learning_phase = None
-        try:
-            concrete_func = function.get_concrete_function()
-        finally:
-            # Put everything back
-            model.call = model_call
-            if old_get_learning_phase is not None:
-                tensorflow_core.python.keras.backend.learning_phase = old_get_learning_phase
+    concrete_func = _get_concrete_function(model, input_signature)
 
     # These inputs will be removed during freezing (includes resources, etc.)
     if hasattr(concrete_func.graph, '_captures'):

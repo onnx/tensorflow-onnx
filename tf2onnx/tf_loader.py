@@ -658,7 +658,6 @@ def from_saved_model(model_path, input_names, output_names, tag=None,
 def from_keras(model_path, input_names, output_names):
     """Load keras model - experimental for now."""
     from tensorflow import keras as _keras
-    from tensorflow.python.keras.saving import saving_utils as _saving_utils
 
     # Handles Keras when Eager mode is enabled.
     custom_objects = None
@@ -668,8 +667,16 @@ def from_keras(model_path, input_names, output_names):
             _keras.backend.set_learning_phase(False)
             keras_model = _keras.models.load_model(model_path, custom_objects)
 
-            function = _saving_utils.trace_model_call(keras_model)
-            concrete_func = function.get_concrete_function()
+            try:
+                from tensorflow.python.keras.saving import saving_utils as _saving_utils  # pylint: disable=import-outside-toplevel
+                function = _saving_utils.trace_model_call(keras_model)
+                concrete_func = function.get_concrete_function()
+            except (ImportError, AttributeError):
+                input_sig = [tf.TensorSpec(shape=inp.shape, dtype=inp.dtype) for inp in keras_model.inputs]
+                @tf.function(input_signature=input_sig)
+                def model_fn(*args):
+                    return keras_model(*args, training=False)
+                concrete_func = model_fn.get_concrete_function()
             # allow to pass inputs and outputs from caller if we don't want all of them
             input_names = [input_tensor.name for input_tensor in concrete_func.inputs
                            if input_tensor.dtype != tf.dtypes.resource]
