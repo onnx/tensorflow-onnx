@@ -1,4 +1,5 @@
 name: Unit Test Run
+description: Unit test run
 
 inputs:
   tf_version:
