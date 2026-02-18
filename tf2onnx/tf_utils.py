@@ -11,7 +11,10 @@ import numpy as np
 import tensorflow as tf
 from onnx import numpy_helper, onnx_pb
 from packaging.version import Version
-from tensorflow.core.framework import graph_pb2, tensor_pb2, types_pb2
+try:
+    from tensorflow.core.framework import graph_pb2, tensor_pb2, types_pb2
+except ImportError:
+    from tensorflow.python.framework import graph_pb2, tensor_pb2, types_pb2
 from tensorflow.python.framework import tensor_util
 
 from tf2onnx import utils
