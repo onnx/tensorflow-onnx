@@ -24,7 +24,6 @@ runs:
           python -m pip install --upgrade pip
           pip install onnxconverter-common
           pip install onnx==${{ inputs.onnx_version }}
-          pip install h5py==3.7.0
           pip install parameterized
           pip install timeout-decorator
           pip install coloredlogs flatbuffers
@@ -52,7 +51,7 @@ runs:
 
           pip install -e .
 
-          echo "----- List all of depdencies:"
+          echo "----- List all of dependencies:"
           pip freeze --all
 
     - name: Run keras_application_test (${{ runner.os }})

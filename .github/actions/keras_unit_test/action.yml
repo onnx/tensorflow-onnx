@@ -24,7 +24,6 @@ runs:
           python -m pip install --upgrade pip
           pip install onnxconverter-common
           pip install onnx==${{ inputs.onnx_version }}
-          pip install h5py==3.7.0
           pip install parameterized
           pip install timeout-decorator
           pip install coloredlogs flatbuffers

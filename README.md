@@ -21,8 +21,8 @@ The common issues we run into we try to document here [Troubleshooting Guide](Tr
 
 | Build Type | OS | Python | TensorFlow | ONNX opset |
 | ---        | -  | ---    | ---        | ---        |
-| Unit Test - Basic | Linux, Windows | 3.10-3.12 | 2.12-2.15 | 14-18 |
-| Unit Test - Full | Linux, Windows | 3.10-3.12 | 2.12-2.15 | 14-18 | 
+| Unit Test - Basic | Linux, Windows | 3.10-3.12 | 2.13-2.15 | 14-18 |
+| Unit Test - Full | Linux, Windows | 3.10-3.12 | 2.13-2.15 | 14-18 | 
 <br/>
 
 ## Supported Versions
@@ -38,7 +38,7 @@ If you want the graph to be generated with a specific opset, use ```--opset``` i
 
 ### TensorFlow
 
-We support ```tf-2.x```. To keep our test matrix manageable we test tf2onnx running on top of ```tf-2.12 or better```.
+We support ```tf-2.x```. To keep our test matrix manageable we test tf2onnx running on top of ```tf-2.13 or better```.
 
 ### Python
 

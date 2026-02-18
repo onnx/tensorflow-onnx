@@ -24,10 +24,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Run Tests (Py310-TF2.12)
+      - name: Run Tests (Py310-TF2.13)
         uses: ./.github/actions/keras_application_test
         with:
-          tf_version: '2.12.0'
+          tf_version: '2.13.0'
           python_version: '3.10'
           ort_version: '1.16.3'
           onnx_version: '1.16.1'
@@ -36,7 +36,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Test Results (Py310-TF2.12-ubuntu)
+          name: Test Results (Py310-TF2.13-ubuntu)
           path: ./**/test-results-*.xml
 
   Test_max_py_with_latest_tf: # Do not change this name because it is used in Ruleset of this repo.
