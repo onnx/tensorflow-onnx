@@ -1,4 +1,5 @@
 name: Keras2onnx Application Test Run
+description: Run tests for keras2onnx application
 
 inputs:
   tf_version:
