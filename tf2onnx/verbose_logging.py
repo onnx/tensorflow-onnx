@@ -33,6 +33,8 @@ class Logger(logging.Logger):
 
 logging.setLoggerClass(Logger)
 
+getLogger = logging.getLogger
+
 
 # ----------------------------------------------------------------------
 # Formatting
