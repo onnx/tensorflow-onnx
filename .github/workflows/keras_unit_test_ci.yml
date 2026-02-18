@@ -21,7 +21,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Run Tests (Py310-TF2.13)
         uses: ./.github/actions/keras_unit_test
@@ -45,7 +45,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Run Tests (Py310-TF2.15)
         uses: ./.github/actions/keras_unit_test
@@ -61,6 +61,7 @@ jobs:
         with:
           name: Test Results (Py310-TF2.15-ubuntu)
           path: ./**/test-results-*.xml
+
 
   Extra_tests:
     strategy:
@@ -83,7 +84,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Run Tests (Py${{ matrix.python_version }}_TF${{ matrix.tf_version }}_${{ matrix.os }}_${{ matrix.ort_version }})
         uses: ./.github/actions/keras_unit_test

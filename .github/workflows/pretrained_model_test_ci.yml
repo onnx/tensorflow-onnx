@@ -22,7 +22,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Run Tests (Py310-TF2.13-18)
         uses: ./.github/actions/pretrained_model_test
@@ -49,7 +49,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Run Tests (Py310-TF2.15-18)
         uses: ./.github/actions/pretrained_model_test
@@ -68,6 +68,7 @@ jobs:
         with:
           name: Test Results (Py310-TF2.15-18-ubuntu)
           path: ./**/test-results-*.xml
+
 
   Extra_tests:  # Do not change this name because it is used in 'publish-test-results' section below.
     strategy:
@@ -92,7 +93,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Run Tests (Py${{ matrix.python_version }}_TF${{ matrix.tf_version }}_${{ matrix.os }}_${{ matrix.opset_version }}_${{ matrix.ort_version }}_${{ matrix.skip_tflite }})
         uses: ./.github/actions/pretrained_model_test
