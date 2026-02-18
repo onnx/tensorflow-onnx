@@ -5,9 +5,10 @@
 tf2onnx.rewrite - rewrite tensorflow subgraph to onnx gemm op
 """
 import logging
-from onnx import onnx_pb
-from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 
+from onnx import onnx_pb
+
+from tf2onnx.graph_matcher import GraphMatcher, OpTypePattern
 
 # pylint: disable=missing-docstring
 

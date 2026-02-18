@@ -3,15 +3,18 @@
 import os
 import sys
 import unittest
+from os.path import abspath, dirname
+
 import mock_keras2onnx
 import numpy as np
-from mock_keras2onnx.proto import keras
 from keras import regularizers
-from keras.engine import Layer, InputSpec
-from keras.utils import layer_utils, conv_utils
-from os.path import dirname, abspath
+from keras.engine import InputSpec, Layer
+from keras.utils import conv_utils
+from mock_keras2onnx.proto import keras
+
 sys.path.insert(0, os.path.join(dirname(abspath(__file__)), '../../keras2onnx_tests/'))
 from test_utils import run_keras_and_ort, test_level_0
+
 try:
     from keras.utils.conv_utils import normalize_data_format
 except ImportError:

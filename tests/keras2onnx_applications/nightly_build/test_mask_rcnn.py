@@ -3,16 +3,19 @@
 import os
 import sys
 import unittest
+from os.path import abspath, dirname
+
 import mock_keras2onnx
+import numpy as np
+import onnx
 from mock_keras2onnx import set_converter
 from mock_keras2onnx.proto import keras
-import onnx
-import numpy as np
-from os.path import dirname, abspath
-sys.path.insert(0, os.path.join(dirname(abspath(__file__)), '../../keras2onnx_tests/'))
-from test_utils import run_onnx_runtime, print_mismatches, convert_tf_crop_and_resize
 
+sys.path.insert(0, os.path.join(dirname(abspath(__file__)), '../../keras2onnx_tests/'))
 import urllib.request
+
+from test_utils import convert_tf_crop_and_resize, print_mismatches
+
 MASKRCNN_WEIGHTS_PATH = r'https://github.com/matterport/Mask_RCNN/releases/download/v2.0/mask_rcnn_coco.h5'
 model_file_name = 'mask_rcnn_coco.h5'
 if not os.path.exists(model_file_name):

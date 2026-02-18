@@ -3,9 +3,10 @@
 import os
 import sys
 import unittest
+from os.path import abspath, dirname
+
 from mock_keras2onnx.proto import keras
 from mock_keras2onnx.proto.tfcompat import is_tf2
-from os.path import dirname, abspath
 
 sys.path.insert(0, os.path.join(dirname(abspath(__file__)), '../../keras2onnx_tests/'))
 from test_utils import run_image

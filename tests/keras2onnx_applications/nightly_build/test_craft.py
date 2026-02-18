@@ -3,19 +3,19 @@
 import os
 import sys
 import unittest
+from os.path import abspath, dirname
+
 import mock_keras2onnx
 import numpy as np
-from mock_keras2onnx.proto import keras, is_tf_keras
 from keras.applications.vgg16 import VGG16
-from os.path import dirname, abspath
-sys.path.insert(0, os.path.join(dirname(abspath(__file__)), '../../keras2onnx_tests/'))
-from test_utils import run_onnx_runtime
-import tensorflow as tf
-from keras.utils import conv_utils
-from keras.engine import Layer, InputSpec
-import keras.backend as K
-from onnxconverter_common.onnx_ex import get_maximum_opset_supported
+from mock_keras2onnx.proto import keras
 
+sys.path.insert(0, os.path.join(dirname(abspath(__file__)), '../../keras2onnx_tests/'))
+import keras.backend as K
+import tensorflow as tf
+from keras.engine import InputSpec, Layer
+from onnxconverter_common.onnx_ex import get_maximum_opset_supported
+from test_utils import run_onnx_runtime
 
 Activation = keras.layers.Activation
 BatchNormalization = keras.layers.BatchNormalization

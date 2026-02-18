@@ -1,13 +1,14 @@
 # SPDX-License-Identifier: Apache-2.0
 
-import pytest
-import tensorflow as tf
 import mock_keras2onnx
 import numpy as np
-from mock_keras2onnx.proto import keras, is_tf_keras, is_tensorflow_older_than
-from tf2onnx.keras2onnx_api import convert_keras
-from test_utils import get_input_names
+import pytest
+import tensorflow as tf
+from mock_keras2onnx.proto import is_tensorflow_older_than, is_tf_keras, keras
 from packaging.version import Version
+from test_utils import get_input_names
+
+from tf2onnx.keras2onnx_api import convert_keras
 
 Activation = keras.layers.Activation
 BatchNormalization = keras.layers.BatchNormalization

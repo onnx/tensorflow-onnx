@@ -4,9 +4,6 @@
 # Modifications Copyright (c) Microsoft.
 
 import tensorflow as tf
-
-from mock_keras2onnx.proto import keras
-from keras.backend import tensorflow_backend as KTF
 from keras.backend.common import image_data_format
 
 py_all = all

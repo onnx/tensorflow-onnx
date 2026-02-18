@@ -3,12 +3,15 @@
 import os
 import sys
 import unittest
+from os.path import abspath, dirname
+
 import mock_keras2onnx
 import numpy as np
 from mock_keras2onnx.proto import keras
-from os.path import dirname, abspath
+
 sys.path.insert(0, os.path.join(dirname(abspath(__file__)), '../../keras2onnx_tests/'))
 from test_utils import run_keras_and_ort, test_level_0
+
 K = keras.backend
 import tensorflow as tf
 
@@ -163,7 +166,6 @@ class DenoisingAutoEncoderSR(BaseSuperResolutionModel):
         """
             Creates a model to remove / reduce noise from upscaled images.
         """
-        from keras.layers.convolutional import Deconvolution2D
 
         # Perform check that model input shape is divisible by 4
         init = super(DenoisingAutoEncoderSR, self).create_model(height, width, channels, load_weights, batch_size)
@@ -492,7 +494,7 @@ def non_local_block(ip, computation_compression=2, mode='embedded'):
 
 
     elif mode == 'concatenate':  # Concatenation instantiation
-        raise NotImplemented('Concatenation mode has not been implemented yet')
+        raise NotImplementedError('Concatenation mode has not been implemented yet')
 
     else:  # Embedded Gaussian instantiation
         # theta path

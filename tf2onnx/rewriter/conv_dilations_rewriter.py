@@ -7,7 +7,8 @@ pat = SpaceToBatchND->DepthwiseConv2dNative->BatchToSpaceND
 """
 
 import numpy as np
-from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
+
+from tf2onnx.graph_matcher import GraphMatcher, OpTypePattern
 
 # pylint: disable=invalid-name,unused-argument,missing-docstring, unused-variable
 

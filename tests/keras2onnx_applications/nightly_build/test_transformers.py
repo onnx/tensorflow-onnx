@@ -1,20 +1,21 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import os
-from os.path import dirname, abspath
-import unittest
 import sys
+import unittest
+from os.path import abspath, dirname
+
 sys.path.insert(0, os.path.join(dirname(abspath(__file__)), '../../keras2onnx_tests/'))
 
 import json
-import urllib.request
 import pickle
+import urllib.request
+
+import mock_keras2onnx
 import numpy as np
 import tensorflow as tf
-
+from mock_keras2onnx.proto import is_tensorflow_older_than, keras
 from onnxconverter_common.onnx_ex import get_maximum_opset_supported
-import mock_keras2onnx
-from mock_keras2onnx.proto import keras, is_tensorflow_older_than
 from test_utils import is_bloburl_access, run_onnx_runtime
 
 enable_full_transformer_test = False
@@ -67,7 +68,7 @@ class TestTransformers(unittest.TestCase):
 
     @unittest.skip("Output shape mismatch for tf model prediction.")
     def test_3layer_gpt2(self):
-        from transformers import GPT2Config, TFGPT2Model, BertTokenizer
+        from transformers import BertTokenizer, GPT2Config, TFGPT2Model
         mock_keras2onnx.proto.keras.backend.set_learning_phase(0)
         config = GPT2Config(n_layer=3)
         model = TFGPT2Model(config)
@@ -179,7 +180,7 @@ class TestTransformers(unittest.TestCase):
 
     def test_TFGPT2(self):
         if enable_full_transformer_test:
-            from transformers import GPT2Config, TFGPT2Model, TFGPT2LMHeadModel, TFGPT2DoubleHeadsModel
+            from transformers import GPT2Config, TFGPT2DoubleHeadsModel, TFGPT2LMHeadModel, TFGPT2Model
             model_list = [TFGPT2Model, TFGPT2LMHeadModel, TFGPT2DoubleHeadsModel]
         else:
             from transformers import GPT2Config, TFGPT2Model
@@ -203,12 +204,19 @@ class TestTransformers(unittest.TestCase):
     @unittest.skipIf(get_maximum_opset_supported() < 12, "Einsum is not supported until opset 12.")
     def test_TFXLNet(self):
         if enable_full_transformer_test:
-            from transformers import XLNetConfig, TFXLNetModel, TFXLNetLMHeadModel, TFXLNetForSequenceClassification, \
-                TFXLNetForTokenClassification, TFXLNetForQuestionAnsweringSimple, XLNetTokenizer
+            from transformers import (
+                TFXLNetForQuestionAnsweringSimple,
+                TFXLNetForSequenceClassification,
+                TFXLNetForTokenClassification,
+                TFXLNetLMHeadModel,
+                TFXLNetModel,
+                XLNetConfig,
+                XLNetTokenizer,
+            )
             model_list = [TFXLNetModel, TFXLNetLMHeadModel, TFXLNetForSequenceClassification, \
                 TFXLNetForTokenClassification, TFXLNetForQuestionAnsweringSimple]
         else:
-            from transformers import XLNetConfig, TFXLNetModel, XLNetTokenizer
+            from transformers import TFXLNetModel, XLNetConfig, XLNetTokenizer
             model_list = [TFXLNetModel]
 
         # XLNetTokenizer need SentencePiece, so the pickle file does not work here.
@@ -273,7 +281,7 @@ class TestTransformers(unittest.TestCase):
 
     @unittest.skip('tensorflow.GraphDef exceeds maximum protobuf size of 2GB')
     def test_TFXLMModel(self):
-        from transformers import XLMConfig, TFXLMModel
+        from transformers import TFXLMModel, XLMConfig
         keras.backend.clear_session()
         # pretrained_weights = 'xlm-mlm-enfr-1024'
         tokenizer_file = 'xlm_xlm-mlm-enfr-1024.pickle'
@@ -289,7 +297,7 @@ class TestTransformers(unittest.TestCase):
 
     @unittest.skip('tensorflow.GraphDef exceeds maximum protobuf size of 2GB')
     def test_TFXLMWithLMHeadModel(self):
-        from transformers import XLMConfig, TFXLMWithLMHeadModel
+        from transformers import TFXLMWithLMHeadModel, XLMConfig
         keras.backend.clear_session()
         # pretrained_weights = 'xlm-mlm-enfr-1024'
         tokenizer_file = 'xlm_xlm-mlm-enfr-1024.pickle'
@@ -305,7 +313,7 @@ class TestTransformers(unittest.TestCase):
 
     @unittest.skip('tensorflow.GraphDef exceeds maximum protobuf size of 2GB')
     def test_TFXLMForSequenceClassification(self):
-        from transformers import XLMConfig, TFXLMForSequenceClassification
+        from transformers import TFXLMForSequenceClassification, XLMConfig
         keras.backend.clear_session()
         # pretrained_weights = 'xlm-mlm-enfr-1024'
         tokenizer_file = 'xlm_xlm-mlm-enfr-1024.pickle'
@@ -319,7 +327,7 @@ class TestTransformers(unittest.TestCase):
 
     @unittest.skip('tensorflow.GraphDef exceeds maximum protobuf size of 2GB')
     def test_TFXLMForQuestionAnsweringSimple(self):
-        from transformers import XLMConfig, TFXLMForQuestionAnsweringSimple
+        from transformers import TFXLMForQuestionAnsweringSimple, XLMConfig
         keras.backend.clear_session()
         # pretrained_weights = 'xlm-mlm-enfr-1024'
         tokenizer_file = 'xlm_xlm-mlm-enfr-1024.pickle'

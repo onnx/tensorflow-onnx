@@ -9,13 +9,13 @@ import sys
 import unittest
 from collections import defaultdict
 
-from packaging.version import Version
-from parameterized import parameterized
-import timeout_decorator
 import numpy as np
 import tensorflow as tf
+import timeout_decorator
+from packaging.version import Version
+from parameterized import parameterized
 
-from tf2onnx import constants, logging, utils, tf_utils, tf_loader
+from tf2onnx import constants, logging, tf_loader, tf_utils, utils
 
 # pylint: disable=import-outside-toplevel
 __all__ = [

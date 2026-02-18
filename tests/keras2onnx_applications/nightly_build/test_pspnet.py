@@ -3,13 +3,15 @@
 import os
 import sys
 import unittest
+from os.path import abspath, dirname
+
 import keras
 import keras_segmentation
 import numpy as np
-from os.path import dirname, abspath
 
 sys.path.insert(0, os.path.join(dirname(abspath(__file__)), '../../keras2onnx_tests/'))
 from test_utils import run_image
+
 img_path = os.path.join(os.path.dirname(__file__), '../data', 'street.jpg')
 
 Activation = keras.layers.Activation

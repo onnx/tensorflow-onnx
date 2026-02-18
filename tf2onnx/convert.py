@@ -10,18 +10,17 @@ python -m tf2onnx.convert : api and commandline tool to convert a tensorflow mod
 import argparse
 import os
 import sys
+
 from packaging.version import Version
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = "3"
 
 import tensorflow as tf
 
-from tf2onnx.tfonnx import process_tf_graph
-from tf2onnx import constants, logging, utils, optimizer
-from tf2onnx import tf_loader
+from tf2onnx import constants, logging, optimizer, tf_loader, utils
 from tf2onnx.graph import ExternalTensorStorage
 from tf2onnx.tf_utils import compress_graph_def, get_tf_version
-
+from tf2onnx.tfonnx import process_tf_graph
 
 
 def _get_input_names(model):
@@ -239,7 +238,7 @@ def main():
 
     if any(opset.domain == constants.CONTRIB_OPS_DOMAIN for opset in extra_opset):
         try:
-            import tensorflow_text   # pylint: disable=import-outside-toplevel
+            import tensorflow_text  # pylint: disable=import-outside-toplevel
         except ModuleNotFoundError:
             logger.warning("tensorflow_text not installed. Model will fail to load if tensorflow_text ops are used.")
 
@@ -443,7 +442,9 @@ def _get_concrete_function(model, input_signature):
     """Get a concrete function from a Keras model, with fallbacks for different TF versions."""
     # Try trace_model_call first (works for TF < 2.16)
     try:
-        from tensorflow.python.keras.saving import saving_utils as _saving_utils  # pylint: disable=import-outside-toplevel
+        from tensorflow.python.keras.saving import (
+            saving_utils as _saving_utils,  # pylint: disable=import-outside-toplevel
+        )
         function = _saving_utils.trace_model_call(model, input_signature)
         try:
             return function.get_concrete_function()

@@ -3,16 +3,17 @@
 import os
 import sys
 import unittest
+from os.path import abspath, dirname
+
 import numpy as np
 import onnxruntime
-from os.path import dirname, abspath
-from mock_keras2onnx.proto import keras, is_keras_older_than
 from keras.applications.vgg16 import VGG16
-from onnxconverter_common.onnx_ex import get_maximum_opset_supported
+from mock_keras2onnx.proto import keras
 from packaging.version import Version
 
 sys.path.insert(0, os.path.join(dirname(abspath(__file__)), '../../keras2onnx_tests/'))
 from test_utils import run_image
+
 img_path = os.path.join(os.path.dirname(__file__), '../data', 'street.jpg')
 
 

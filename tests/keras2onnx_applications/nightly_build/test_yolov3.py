@@ -1,22 +1,22 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import os
-from os.path import dirname, abspath
-import numpy as np
-import unittest
 import sys
+import unittest
+from os.path import abspath, dirname
+
+import numpy as np
+
 sys.path.insert(0, os.path.join(dirname(abspath(__file__)), '../../keras2onnx_tests/'))
 sys.path.insert(0, os.path.join(dirname(abspath(__file__)), '../yolov3'))
 
-from keras.models import load_model
-import onnx
 import urllib.request
-from yolov3 import YOLO, convert_model
 
+import onnx
+from keras.models import load_model
 from packaging.version import Version
-import mock_keras2onnx
 from test_utils import is_bloburl_access
-
+from yolov3 import YOLO, convert_model
 
 YOLOV3_WEIGHTS_PATH = r'https://lotus.blob.core.windows.net/converter-models/yolov3.h5'
 model_file_name = 'yolov3.h5'

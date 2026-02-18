@@ -6,9 +6,12 @@ __all__ = ["utils", "graph_matcher", "graph", "graph_builder",
            "tfonnx", "shape_inference", "schemas", "tf_utils", "tf_loader", "convert"]
 
 import importlib
+
 import onnx
-from .version import git_version, version as __version__
+
 from . import verbose_logging as logging
+from .version import git_version
+from .version import version as __version__
 
 # NOTE: Importing heavily submodules here leads to a RuntimeWarning
 #    when launching "python -m tf2onnx.convert":

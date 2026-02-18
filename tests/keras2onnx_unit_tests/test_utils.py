@@ -1,19 +1,20 @@
 # SPDX-License-Identifier: Apache-2.0
 
+import json
 import os
 import sys
-import onnx
-from onnx import helper
-import numpy as np
-import mock_keras2onnx
-from mock_keras2onnx.proto import keras, is_keras_older_than
-from mock_keras2onnx.proto.tfcompat import is_tf2
-from packaging.version import Version
-from tf2onnx.keras2onnx_api import convert_keras, get_maximum_opset_supported
 import time
-import json
 import urllib
 
+import mock_keras2onnx
+import numpy as np
+import onnx
+from mock_keras2onnx.proto import is_keras_older_than, keras
+from mock_keras2onnx.proto.tfcompat import is_tf2
+from onnx import helper
+from packaging.version import Version
+
+from tf2onnx.keras2onnx_api import convert_keras, get_maximum_opset_supported
 
 # Mapping opset to ONNXRuntime version.
 ORT_OPSET_VERSION = {
@@ -165,7 +166,7 @@ def parse_profile_results(sess_time, kernel_time_only=False, threshold=0):
     if (threshold > 0):
         results.append(f"Threshold of Percentage > {threshold:.2f}%")
 
-    results.append(f"Duration\tPercentage\tProvider\tName")
+    results.append("Duration\tPercentage\tProvider\tName")
     for k, v in sorted(node_time.items(), key=lambda x: x[1], reverse=True):
         provider = node_provider[k] if k in node_provider else ""
         ratio = v / total

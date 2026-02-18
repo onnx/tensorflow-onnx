@@ -3,13 +3,16 @@
 import os
 import sys
 import unittest
+from os.path import abspath, dirname
+
 import mock_keras2onnx
 import numpy as np
-from mock_keras2onnx.proto import keras
-from os.path import dirname, abspath
 from keras.regularizers import l2
+from mock_keras2onnx.proto import keras
+
 sys.path.insert(0, os.path.join(dirname(abspath(__file__)), '../../keras2onnx_tests/'))
 from test_utils import run_keras_and_ort, test_level_0
+
 K = keras.backend
 
 Activation = keras.layers.Activation
@@ -463,10 +466,10 @@ def NonLocalResNet(input_shape=None, classes=10, block='bottleneck', residual_un
     x = _bn_relu(block)
 
     # Classifier block
-    if include_top and top is 'classification':
+    if include_top and top == 'classification':
         x = GlobalAveragePooling2D()(x)
         x = Dense(units=classes, activation=activation, kernel_initializer="he_normal")(x)
-    elif include_top and top is 'segmentation':
+    elif include_top and top == 'segmentation':
         x = Conv2D(classes, (1, 1), activation='linear', padding='same')(x)
 
         if K.image_data_format() == 'channels_first':

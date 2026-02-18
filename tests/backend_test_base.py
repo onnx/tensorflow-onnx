@@ -8,27 +8,33 @@
 
 import logging
 import os
-import unittest
 import re
+import unittest
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
 import numpy as np
-import tensorflow as tf
-from tensorflow.python.ops import variables as variables_lib
-from tensorflow.python.ops import lookup_ops
 import onnx
+import tensorflow as tf
 from common import get_test_config
+from tensorflow.python.ops import lookup_ops
+from tensorflow.python.ops import variables as variables_lib
 from tfjs_runner import run_tfjs
-from tf2onnx import constants
-from tf2onnx import utils
-from tf2onnx.tfonnx import process_tf_graph
-from tf2onnx import optimizer
-from tf2onnx.tf_loader import tf_reset_default_graph, tf_session, tf_placeholder, from_function, freeze_session
-from tf2onnx.tf_loader import tf_optimize, is_tf2, get_hash_table_info
-from tf2onnx.tf_utils import compress_graph_def
-from tf2onnx.graph import ExternalTensorStorage
 
+from tf2onnx import constants, optimizer, utils
+from tf2onnx.graph import ExternalTensorStorage
+from tf2onnx.tf_loader import (
+    freeze_session,
+    from_function,
+    get_hash_table_info,
+    is_tf2,
+    tf_optimize,
+    tf_placeholder,
+    tf_reset_default_graph,
+    tf_session,
+)
+from tf2onnx.tf_utils import compress_graph_def
+from tf2onnx.tfonnx import process_tf_graph
 
 if is_tf2():
     tf_set_random_seed = tf.compat.v1.set_random_seed

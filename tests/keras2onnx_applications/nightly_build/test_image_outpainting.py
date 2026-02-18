@@ -3,13 +3,16 @@
 import os
 import sys
 import unittest
+from os.path import abspath, dirname
+
 import mock_keras2onnx
-from mock_keras2onnx import set_converter
 import numpy as np
+from mock_keras2onnx import set_converter
 from mock_keras2onnx.proto import keras
-from os.path import dirname, abspath
+
 sys.path.insert(0, os.path.join(dirname(abspath(__file__)), '../../keras2onnx_tests/'))
-from test_utils import run_keras_and_ort, test_level_0, is_keras_older_than, convert_InstanceNormalizationLayer
+from test_utils import convert_InstanceNormalizationLayer, is_keras_older_than, run_keras_and_ort, test_level_0
+
 K = keras.backend
 
 Activation = keras.layers.Activation
@@ -39,6 +42,7 @@ if not is_keras_older_than("2.2.4"):
     ReLU = keras.layers.ReLU
 
 import keras_contrib
+
 InstanceNormalization = keras_contrib.layers.InstanceNormalization
 
 Sequential = keras.models.Sequential

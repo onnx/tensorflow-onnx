@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
+import argparse
 import os
 from os import listdir
 from os.path import isfile, join
-import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--exclude')

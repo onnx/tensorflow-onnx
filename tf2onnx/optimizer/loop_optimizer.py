@@ -6,8 +6,8 @@
 """
 
 from tf2onnx.utils import make_name, make_sure
-from .optimizer_base import GraphOptimizerBase
 
+from .optimizer_base import GraphOptimizerBase
 
 # pylint: disable=logging-not-lazy,unused-argument,missing-docstring,unused-variable,arguments-differ
 

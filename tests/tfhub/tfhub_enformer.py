@@ -1,12 +1,13 @@
 # SPDX-License-Identifier: Apache-2.0
 import os
-import numpy
-from numpy.testing import assert_almost_equal
-from onnxruntime import InferenceSession
-from _tools import generate_random_images, benchmark, measure_time
-from tensorflow import convert_to_tensor
+
 import tensorflow as tf
 import tensorflow_hub as hub
+from _tools import generate_random_images, measure_time
+from numpy.testing import assert_almost_equal
+from onnxruntime import InferenceSession
+from tensorflow import convert_to_tensor
+
 import tf2onnx
 
 
@@ -46,7 +47,7 @@ def main(opset=13):
 
     print('[benchmark ort]')
     results_ort, duration_ort = measure_time(fct_ort, imgs)
-    print("ORT", len(imgs), duration_ort)    
+    print("ORT", len(imgs), duration_ort)
 
     mean_ort = sum(duration_ort) / len(duration_ort)
     mean_tf = sum(duration_tf) / len(duration_tf)

@@ -9,11 +9,11 @@ import logging
 
 import numpy as np
 from onnx import onnx_pb
+
 from tf2onnx import constants, utils
+from tf2onnx.graph_builder import GraphBuilder
 from tf2onnx.handler import tf_op
 from tf2onnx.onnx_opset import common
-from tf2onnx.graph_builder import GraphBuilder
-
 
 logger = logging.getLogger(__name__)
 

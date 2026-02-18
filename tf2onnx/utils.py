@@ -5,25 +5,25 @@
 tf2onnx.utils - misc utilities for tf2onnx
 """
 
-import os
 import collections
 import inspect
+import logging
+import os
 import re
 import shutil
 import tempfile
 import types
 import zipfile
-import logging
-
 from typing import Any, Optional, Sequence
+
+import numpy as np
 import requests
+from google.protobuf import text_format
+from onnx import AttributeProto, ModelProto, NodeProto, __version__, defs, helper, numpy_helper, onnx_pb
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
-import numpy as np
-from google.protobuf import text_format
-from onnx import helper, onnx_pb, defs, numpy_helper, AttributeProto, ModelProto, NodeProto, __version__
-from . import constants
 
+from . import constants
 
 logger = logging.getLogger(__file__)
 

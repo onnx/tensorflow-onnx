@@ -1,15 +1,15 @@
 # SPDX-License-Identifier: Apache-2.0
 
 
+import distutils.command.build
 import os
 import subprocess
 from collections import namedtuple
 from textwrap import dedent
 
-import distutils.command.build
 import setuptools.command.build_py
 import setuptools.command.develop
-from setuptools import setup, Command
+from setuptools import Command, setup
 
 TOP_DIR = os.path.realpath(os.path.dirname(__file__))
 SRC_DIR = os.path.join(TOP_DIR, 'tf2onnx')

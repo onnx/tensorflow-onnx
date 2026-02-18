@@ -3,8 +3,7 @@
 import os
 import sys
 import unittest
-import keras_segmentation
-from os.path import dirname, abspath
+from os.path import abspath, dirname
 
 sys.path.insert(0, os.path.join(dirname(abspath(__file__)), '../../keras2onnx_tests/'))
 from test_utils import run_image
@@ -12,6 +11,7 @@ from test_utils import run_image
 img_path = os.path.join(os.path.dirname(__file__), '../data', 'street.jpg')
 
 from mock_keras2onnx.proto import is_keras_older_than
+
 
 class TestDenseNet_1(unittest.TestCase):
 

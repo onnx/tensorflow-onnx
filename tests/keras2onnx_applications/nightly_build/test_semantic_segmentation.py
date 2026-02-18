@@ -1,17 +1,20 @@
 # SPDX-License-Identifier: Apache-2.0
 
+import math
 import os
 import sys
 import unittest
+from os.path import abspath, dirname
+
 import mock_keras2onnx
 import numpy as np
-import math
-from onnxconverter_common.onnx_ex import get_maximum_opset_supported
-from mock_keras2onnx.proto import keras
 from keras.initializers import RandomNormal
-from os.path import dirname, abspath
+from mock_keras2onnx.proto import keras
+from onnxconverter_common.onnx_ex import get_maximum_opset_supported
+
 sys.path.insert(0, os.path.join(dirname(abspath(__file__)), '../../keras2onnx_tests/'))
 from test_utils import run_keras_and_ort, test_level_0
+
 K = keras.backend
 import tensorflow as tf
 

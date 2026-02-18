@@ -3,13 +3,15 @@
 import os
 import sys
 import unittest
+from os.path import abspath, dirname
+
 import mock_keras2onnx
 import numpy as np
-from mock_keras2onnx.proto import keras, is_tf_keras
-from os.path import dirname, abspath
+from mock_keras2onnx.proto import keras
+
 sys.path.insert(0, os.path.join(dirname(abspath(__file__)), '../../keras2onnx_tests/'))
-from test_utils import run_onnx_runtime
 import tensorflow as tf
+from test_utils import run_onnx_runtime
 
 Activation = keras.layers.Activation
 AveragePooling2D = keras.layers.AveragePooling2D

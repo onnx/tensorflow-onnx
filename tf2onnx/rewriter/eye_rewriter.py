@@ -6,8 +6,9 @@ tf2onnx.rewriter.eye_rewriter - supports tf.eye
 """
 
 from onnx import onnx_pb
+
 from tf2onnx.graph_builder import GraphBuilder
-from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
+from tf2onnx.graph_matcher import GraphMatcher, OpTypePattern
 
 # pylint: disable=invalid-name,unused-argument,missing-docstring, unused-variable
 

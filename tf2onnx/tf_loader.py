@@ -5,18 +5,23 @@
 
 import logging
 import uuid
-from packaging.version import Version
 
 import tensorflow as tf
 from google.protobuf.message import DecodeError
+from packaging.version import Version
 from tensorflow.core.framework import tensor_pb2
 from tensorflow.core.protobuf import saved_model_pb2
 from tensorflow.python.ops import lookup_ops
 from tensorflow.python.util import compat
 
 from tf2onnx import utils
-from tf2onnx.tf_utils import (get_tf_version, tflist_to_onnx, get_hash_table_info, replace_placeholders_with_tables,
-                              HashTableInfo)
+from tf2onnx.tf_utils import (
+    HashTableInfo,
+    get_hash_table_info,
+    get_tf_version,
+    replace_placeholders_with_tables,
+    tflist_to_onnx,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -48,8 +53,8 @@ except ImportError:
 
 try:
     # pylint: disable=protected-access
-    from tensorflow.python.saved_model.load import _RestoredResource as TfRestoredResourceType
     from tensorflow.python.ops.lookup_ops import StaticHashTable as TfStaticHashTableType
+    from tensorflow.python.saved_model.load import _RestoredResource as TfRestoredResourceType
     from tensorflow.python.training.tracking.base import Trackable as TfTrackableType
 except ImportError:
     TfRestoredResourceType = tuple()  # isinstance(x, tuple()) is always false
@@ -126,8 +131,9 @@ def convert_variables_to_constants_large_model(func):
 
     if tf.__version__.startswith("2.2."):
         try:
-            from tensorflow.python.framework.convert_to_constants import \
-                 _convert_variables_to_constants_v2_impl # pylint: disable=protected-access
+            from tensorflow.python.framework.convert_to_constants import (
+                _convert_variables_to_constants_v2_impl,  # pylint: disable=protected-access
+            )
         except ImportError:
             _not_implemented_tf_placeholder("_convert_variables_to_constants_v2_impl")()
         frozen_graph_def, _ = \
@@ -135,12 +141,14 @@ def convert_variables_to_constants_large_model(func):
         return frozen_graph_def
 
     try:
-        from tensorflow.python.framework.convert_to_constants import \
-            _FunctionConverterData, _replace_variables_by_constants # pylint: disable=protected-access
+        from tensorflow.python.framework.convert_to_constants import (
+            _FunctionConverterData,  # pylint: disable=protected-access
+            _replace_variables_by_constants,
+        )
     except ImportError:
         _not_implemented_tf_placeholder("_replace_variables_by_constants")()
 
-    from tensorflow.python.framework import tensor_util, tensor_shape
+    from tensorflow.python.framework import tensor_shape, tensor_util
     make_tensor_proto_original = tensor_util.make_tensor_proto
     # Hack to avoid 2GB check
     def make_tensor_proto_wrapped(values, dtype=None, shape=None, verify_shape=False, allow_broadcast=False):
@@ -160,8 +168,10 @@ def convert_variables_to_constants_large_model(func):
         function_converter = _FunctionConverterData
         if Version(tf.__version__) >= Version("2.6.0"):
             from tensorflow.python.eager import context
-            from tensorflow.python.framework.convert_to_constants import _FunctionConverterDataInEager, \
-                _FunctionConverterDataInGraph
+            from tensorflow.python.framework.convert_to_constants import (
+                _FunctionConverterDataInEager,
+                _FunctionConverterDataInGraph,
+            )
             if context.executing_eagerly():
                 function_converter = _FunctionConverterDataInEager
             else:
@@ -668,7 +678,9 @@ def from_keras(model_path, input_names, output_names):
             keras_model = _keras.models.load_model(model_path, custom_objects)
 
             try:
-                from tensorflow.python.keras.saving import saving_utils as _saving_utils  # pylint: disable=import-outside-toplevel
+                from tensorflow.python.keras.saving import (
+                    saving_utils as _saving_utils,  # pylint: disable=import-outside-toplevel
+                )
                 function = _saving_utils.trace_model_call(keras_model)
                 concrete_func = function.get_concrete_function()
             except (ImportError, AttributeError):
@@ -702,7 +714,8 @@ def from_keras(model_path, input_names, output_names):
 
 
 def tf_optimize_grappler(input_names, output_names, graph_def):
-    from tensorflow.core.protobuf import meta_graph_pb2 as meta_graph_pb2, config_pb2, rewriter_config_pb2
+    from tensorflow.core.protobuf import config_pb2
+    from tensorflow.core.protobuf import meta_graph_pb2 as meta_graph_pb2
     from tensorflow.python.grappler import tf_optimizer as tf_opt
 
     config = config_pb2.ConfigProto()

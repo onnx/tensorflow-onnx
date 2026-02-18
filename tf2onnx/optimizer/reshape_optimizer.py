@@ -9,10 +9,13 @@
 """
 
 from collections import Counter
+
 import numpy as np
+
 from tf2onnx import utils
 from tf2onnx.graph_builder import GraphBuilder
-from tf2onnx.symbolic_executor import SymbolicExecutor, SymbolicTensorElement, SymbolicExecutionException
+from tf2onnx.symbolic_executor import SymbolicExecutionException, SymbolicExecutor, SymbolicTensorElement
+
 from .optimizer_base import GraphOptimizerBase
 
 # pylint: disable=logging-not-lazy,unused-argument,missing-docstring

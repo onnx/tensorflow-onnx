@@ -7,6 +7,7 @@
 """
 
 import numpy as np
+
 from .. import utils
 from .optimizer_base import GraphOptimizerBase
 

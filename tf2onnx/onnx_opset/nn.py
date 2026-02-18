@@ -8,8 +8,9 @@ nn
 import logging
 
 import numpy as np
-from onnx import onnx_pb, helper
+from onnx import helper, onnx_pb
 from onnx.onnx_pb import TensorProto
+
 from tf2onnx import constants, utils
 from tf2onnx.graph_builder import GraphBuilder
 from tf2onnx.handler import tf_op

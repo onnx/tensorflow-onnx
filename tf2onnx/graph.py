@@ -8,15 +8,14 @@ tf2onnx.graph - class to manage graph manipulation on top of onnx
 import collections
 import copy
 import logging
-import six
-import numpy as np
 
-from onnx import helper, numpy_helper, shape_inference, AttributeProto, TensorProto
-from tf2onnx import utils, __version__, git_version
-from tf2onnx.utils import make_name, port_name, find_opset
-from tf2onnx import optimizer
+import numpy as np
+import six
+from onnx import AttributeProto, TensorProto, helper, numpy_helper, shape_inference
+
+from tf2onnx import __version__, constants, git_version, optimizer, utils
 from tf2onnx.schemas import get_schema, infer_onnx_shape_dtype
-from tf2onnx import constants
+from tf2onnx.utils import find_opset, make_name, port_name
 
 logger = logging.getLogger(__name__)
 

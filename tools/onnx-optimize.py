@@ -15,10 +15,9 @@ import logging
 import onnx
 from onnx import helper, shape_inference
 
+from tf2onnx import constants, logging, optimizer
 from tf2onnx.graph import GraphUtil
-from tf2onnx import logging, optimizer, constants
 from tf2onnx.late_rewriters import rewrite_channels_first, rewrite_channels_last
-
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("onnx-optimize")
