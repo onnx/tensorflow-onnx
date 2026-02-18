@@ -22,7 +22,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Run Tests (Py310-TF2.13)
         uses: ./.github/actions/keras_application_test
@@ -34,7 +34,7 @@ jobs:
 
       - name: Upload Test Results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: Test Results (Py310-TF2.13-ubuntu)
           path: ./**/test-results-*.xml
@@ -46,7 +46,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Run Tests (Py310-TF2.15)
         uses: ./.github/actions/keras_application_test
@@ -58,11 +58,38 @@ jobs:
 
       - name: Upload Test Results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: Test Results (Py310-TF2.15-ubuntu)
           path: ./**/test-results-*.xml
 
+<<<<<<< HEAD
+=======
+  Test_py37_with_tf1_15: # Do not change this name because it is used in Ruleset of this repo.
+    strategy:
+      fail-fast: false
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Run Tests (Py37-TF1.15)
+        uses: ./.github/actions/keras_application_test
+        with:
+          tf_version: '1.15.5'
+          python_version: '3.7'
+          ort_version: '1.14.1'
+          onnx_version: '1.14.1'
+
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: Test Results (Py37-TF1.15-ubuntu)
+          path: ./**/test-results-*.xml
+
+>>>>>>> main
   Extra_tests:
     strategy:
       fail-fast: false
@@ -84,7 +111,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Run Tests (Py${{ matrix.python_version }}_TF${{ matrix.tf_version }}_${{ matrix.os }}_${{ matrix.ort_version }})
         uses: ./.github/actions/keras_application_test
@@ -95,7 +122,7 @@ jobs:
           onnx_version: ${{ matrix.onnx_version }}
       - name: Upload Test Results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: Test Results (${{ matrix.python_version }}-${{ matrix.tf_version }}-${{ matrix.os }})
           path: ./**/test-results*.xml
@@ -110,7 +137,7 @@ jobs:
     if: always()
     steps:
       - name: Download Artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: artifacts
 
