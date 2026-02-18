@@ -5,7 +5,7 @@
 tf2onnx.rewriter - rewrite tensorflow subgraph to onnx conv2d op with BiasAdd
 """
 from tf2onnx import logging
-from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
+from tf2onnx.graph_matcher import GraphMatcher, OpTypePattern
 
 logger = logging.getLogger(__name__)
 

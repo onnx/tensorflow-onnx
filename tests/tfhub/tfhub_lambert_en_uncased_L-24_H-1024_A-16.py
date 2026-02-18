@@ -1,16 +1,16 @@
 # SPDX-License-Identifier: Apache-2.0
 import os
 from collections import OrderedDict
+
 import numpy
 import numpy.random as rnd
-from _tools import generate_text_inputs, benchmark
+from _tools import benchmark
 
 
 def main(opset=13):
-    
+
     if False:
         import tensorflow as tf
-        import tensorflow_text
         import tensorflow_hub as hub
         sentences = tf.constant(["Hi I'm some text"])
         text_input = tf.keras.layers.Input(shape=(), dtype=tf.string)
@@ -22,7 +22,7 @@ def main(opset=13):
         embedded_inputs = {k: v.numpy() for k, v in preprocessor(sentences).items()}
         for k, v in embedded_inputs.items():
             print(k, v.dtype, v.shape)
-    
+
     url = "https://tfhub.dev/tensorflow/lambert_en_uncased_L-24_H-1024_A-16/2?tf-hub-format=compressed"
     dest = "tf-lambert_en_uncased_L-24_H-1024_A-16"
     name = "lambert_en_uncased_L-24_H-1024_A-16"

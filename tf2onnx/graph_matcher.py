@@ -17,6 +17,7 @@
 """Utilities that match patterns in a tf.Graph."""
 
 from itertools import permutations
+
 import six
 
 

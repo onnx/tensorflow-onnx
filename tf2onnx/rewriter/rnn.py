@@ -7,12 +7,12 @@ tf2onnx.rewriter.rnn - lstm support
 
 import logging
 
-from tf2onnx.rewriter.bilstm_rewriter import rewrite_bidirectional_lstms
 from tf2onnx.rewriter.bigru_rewriter import rewrite_bidirectional_grus
+from tf2onnx.rewriter.bilstm_rewriter import rewrite_bidirectional_lstms
 from tf2onnx.rewriter.custom_rnn_rewriter import CustomRnnRewriter
+from tf2onnx.rewriter.gru_rewriter import GRUUnitRewriter
 from tf2onnx.rewriter.loop_rewriter import LoopRewriter
 from tf2onnx.rewriter.lstm_rewriter import LSTMRewriter
-from tf2onnx.rewriter.gru_rewriter import GRUUnitRewriter
 
 # pylint: disable=invalid-name,unused-argument,missing-docstring
 

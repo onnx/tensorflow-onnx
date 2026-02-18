@@ -3,13 +3,16 @@
 import os
 import sys
 import unittest
+from os.path import abspath, dirname
+
 import mock_keras2onnx
 import numpy as np
-from mock_keras2onnx.proto import keras
 from keras.initializers import RandomUniform
-from os.path import dirname, abspath
+from mock_keras2onnx.proto import keras
+
 sys.path.insert(0, os.path.join(dirname(abspath(__file__)), '../../keras2onnx_tests/'))
 from test_utils import run_keras_and_ort, test_level_0
+
 K = keras.backend
 
 Activation = keras.layers.Activation

@@ -3,14 +3,16 @@
 import os
 import sys
 import unittest
-import mock_keras2onnx
+from os.path import abspath, dirname
+
 import keras_contrib
+import mock_keras2onnx
 import numpy as np
 from mock_keras2onnx import set_converter
 from mock_keras2onnx.proto import keras
-from os.path import dirname, abspath
+
 sys.path.insert(0, os.path.join(dirname(abspath(__file__)), '../../keras2onnx_tests/'))
-from test_utils import run_onnx_runtime, convert_InstanceNormalizationLayer
+from test_utils import convert_InstanceNormalizationLayer, run_onnx_runtime
 
 Activation = keras.layers.Activation
 BatchNormalization = keras.layers.BatchNormalization

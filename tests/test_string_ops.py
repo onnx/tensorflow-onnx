@@ -4,13 +4,13 @@
 """Unit Tests for string ops."""
 
 import unittest
+
 import numpy as np
 import tensorflow as tf
-
 from backend_test_base import Tf2OnnxBackendTestBase
-from common import requires_custom_ops, check_tf_min_version, check_opset_min_version, get_test_config
-from tf2onnx import utils
-from tf2onnx import constants
+from common import check_opset_min_version, check_tf_min_version, get_test_config, requires_custom_ops
+
+from tf2onnx import constants, utils
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test,import-outside-toplevel
 # pylint: disable=wrong-import-position
@@ -123,8 +123,7 @@ class StringOpsTests(Tf2OnnxBackendTestBase):
     @requires_custom_ops("RegexSplitWithOffsets")
     @check_tf_min_version("2.3", "tensorflow_text")
     def test_regex_split_with_offsets(self):
-        from tensorflow_text.python.ops.regex_split_ops import (
-            gen_regex_split_ops as lib_gen_regex_split_ops)
+        from tensorflow_text.python.ops.regex_split_ops import gen_regex_split_ops as lib_gen_regex_split_ops
         text_val = np.array(["a Test 1 2 3 ♠♣",
                              "Hi there test test ♥♦"], dtype=str)
         def func(text):
@@ -147,10 +146,11 @@ class StringOpsTests(Tf2OnnxBackendTestBase):
     @check_tf_min_version("2.3", "tensorflow_text")
     @unittest.skip("Not fixed yet")
     def test_wordpiece_tokenizer(self):
-        from tensorflow_text.python.ops.wordpiece_tokenizer import (
-            gen_wordpiece_tokenizer as lib_gen_wordpiece_tokenizer)
-        from tensorflow.python.ops.ragged import ragged_tensor
         from tensorflow.python.ops import lookup_ops
+        from tensorflow.python.ops.ragged import ragged_tensor
+        from tensorflow_text.python.ops.wordpiece_tokenizer import (
+            gen_wordpiece_tokenizer as lib_gen_wordpiece_tokenizer,
+        )
 
         def _CreateTable(vocab, num_oov=1):
             init = tf.lookup.KeyValueTensorInitializer(

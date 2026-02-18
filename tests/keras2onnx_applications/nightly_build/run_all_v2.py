@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import os
+
 os.environ["PYTHONPATH"] = \
     os.environ.get("PYTHONPATH", "") + os.pathsep + "../../keras2onnx_unit_tests" + os.pathsep + "../../../"
 os.environ["TF2ONNX_CATCH_ERRORS"] = "FALSE"

@@ -12,8 +12,7 @@ import collections
 import re
 
 import onnx
-from onnx import ModelProto
-from onnx import helper, shape_inference
+from onnx import ModelProto, helper, shape_inference
 
 
 def get_args():

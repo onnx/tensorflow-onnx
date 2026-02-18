@@ -7,20 +7,20 @@ import os
 import unittest
 from itertools import product
 
-from packaging.version import Version
-
 import numpy as np
-from numpy.testing import assert_almost_equal
 import tensorflow as tf
-
-from tensorflow.python.ops import lookup_ops
 from backend_test_base import Tf2OnnxBackendTestBase
+
 # pylint reports unused-wildcard-import which is false positive, __all__ is defined in common
 from common import *  # pylint: disable=wildcard-import,unused-wildcard-import
+from numpy.testing import assert_almost_equal
+from packaging.version import Version
+from tensorflow.python.ops import lookup_ops
+
 from tf2onnx import constants, utils
-from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
-from tf2onnx.tf_loader import is_tf2, tf_placeholder_with_default, tf_placeholder
+from tf2onnx.graph_matcher import GraphMatcher, OpTypePattern
 from tf2onnx.onnx_opset.signal import make_dft_constant
+from tf2onnx.tf_loader import is_tf2, tf_placeholder, tf_placeholder_with_default
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,function-redefined,cell-var-from-loop
 
@@ -59,7 +59,7 @@ if is_tf2():
     space_to_batch_nd = tf.compat.v1.space_to_batch_nd
     batch_to_space_nd = tf.compat.v1.batch_to_space_nd
     reverse_v2 = tf.compat.v1.reverse_v2
-   
+
     fused_batch_norm = tf.compat.v1.nn.fused_batch_norm
     dropout = tf.compat.v1.nn.dropout
     resize_nearest_neighbor = tf.compat.v1.image.resize_nearest_neighbor
@@ -81,8 +81,8 @@ elif Version(tf.__version__) >= Version("1.13"):
     space_to_batch_nd = tf.compat.v1.space_to_batch_nd
     batch_to_space_nd = tf.compat.v1.batch_to_space_nd
     reverse_v2 = tf.compat.v1.reverse_v2
-    
-    
+
+
     fused_batch_norm = tf.compat.v1.nn.fused_batch_norm
     dropout = tf.compat.v1.nn.dropout
     quantize_and_dequantize = tf.compat.v1.quantization.quantize_and_dequantize
@@ -105,8 +105,8 @@ else:
     space_to_batch_nd = tf.space_to_batch_nd
     batch_to_space_nd = tf.batch_to_space_nd
     reverse_v2 = tf.reverse_v2
-    
-    
+
+
     fused_batch_norm = tf.nn.fused_batch_norm
     dropout = tf.nn.dropout
     resize_nearest_neighbor = tf.image.resize_nearest_neighbor
@@ -3865,7 +3865,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, **kwargs)
 
     # @check_opset_min_version(7, "broadcasting op")
-    
+
     def test_softmax_cross_entropy_with_logits(self):
         num_class = 5
         data_shape = [100, num_class]
@@ -4931,7 +4931,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
     @check_opset_min_version(11, "Det")
-    
+
     def test_determinant(self):
         x_val = np.array([1., 2., 3., 4., 1., 2.,
                           2., 1., 1., 3., 3., 1.,

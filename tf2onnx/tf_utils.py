@@ -6,18 +6,17 @@ tf2onnx.tf_utils - misc utilities for tf2onnx that interface with tensorflow
 """
 
 import collections
-from packaging.version import Version
 
 import numpy as np
 import tensorflow as tf
-
-from tensorflow.core.framework import types_pb2, tensor_pb2, graph_pb2
+from onnx import numpy_helper, onnx_pb
+from packaging.version import Version
+from tensorflow.core.framework import graph_pb2, tensor_pb2, types_pb2
 from tensorflow.python.framework import tensor_util
 
-from onnx import onnx_pb, numpy_helper
-
 from tf2onnx import utils
-from tf2onnx.utils import make_sure, is_tf_const_op, port_name, map_onnx_to_numpy_type
+from tf2onnx.utils import is_tf_const_op, make_sure, map_onnx_to_numpy_type, port_name
+
 from . import logging
 
 logger = logging.getLogger(__name__)
@@ -171,7 +170,7 @@ def compute_const_folding_using_tf(g, const_node_values, graph_outputs):
     if const_node_values is None:
         const_node_values = {}
     graph_outputs = set(graph_outputs)
-    from tf2onnx.tf_loader import tf_session, tf_placeholder  # pylint: disable=import-outside-toplevel
+    from tf2onnx.tf_loader import tf_placeholder, tf_session  # pylint: disable=import-outside-toplevel
 
     ops = g.get_operations()
     outputs_to_values = {}
@@ -327,7 +326,7 @@ def replace_placeholders_with_tables(graph_def, placeholder_to_table_info):
 
 def read_tf_node_def_attrs(node_def, input_dtypes, input_shapes):
     """Given a tf node def, returns a dict of attribute names to values"""
-    from tf2onnx.tf_loader import tf_session, tf_placeholder  # pylint: disable=import-outside-toplevel
+    from tf2onnx.tf_loader import tf_placeholder, tf_session  # pylint: disable=import-outside-toplevel
     del node_def.input[:]
     node_def.name = "node"
 

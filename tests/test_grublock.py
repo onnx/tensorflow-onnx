@@ -5,13 +5,11 @@
 
 import numpy as np
 import tensorflow as tf
-
-from tensorflow.python.ops import variable_scope
 from backend_test_base import Tf2OnnxBackendTestBase
-from common import unittest_main, check_gru_count, check_tf_max_version
-from common import check_opset_after_tf_version
-from tf2onnx.tf_loader import is_tf2
+from common import check_gru_count, check_opset_after_tf_version, check_tf_max_version, unittest_main
+from tensorflow.python.ops import variable_scope
 
+from tf2onnx.tf_loader import is_tf2
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test
 # pylint: disable=invalid-name

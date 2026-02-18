@@ -11,23 +11,19 @@
 
 import warnings
 
-from mock_keras2onnx.proto import keras
-from keras.models import Model
-from keras.layers.core import Dense, Dropout, Activation, Reshape
-from keras.layers.convolutional import Conv2D, Conv2DTranspose, UpSampling2D
-from keras.layers.pooling import AveragePooling2D, MaxPooling2D
-from keras.layers.pooling import GlobalAveragePooling2D
+import keras.backend as K
+from keras.engine.topology import get_source_inputs
 from keras.layers import Input
+from keras.layers.convolutional import Conv2D, Conv2DTranspose, UpSampling2D
+from keras.layers.core import Activation, Dense, Dropout, Reshape
 from keras.layers.merge import concatenate
 from keras.layers.normalization import BatchNormalization
+from keras.layers.pooling import AveragePooling2D, GlobalAveragePooling2D, MaxPooling2D
+from keras.models import Model
 from keras.regularizers import l2
-from keras.utils.layer_utils import convert_all_kernels_in_model, convert_dense_weights_data_format
 from keras.utils.data_utils import get_file
-from keras.engine.topology import get_source_inputs
+from keras.utils.layer_utils import convert_all_kernels_in_model
 from keras_applications.imagenet_utils import _obtain_input_shape
-from keras.applications.imagenet_utils import decode_predictions
-import keras.backend as K
-
 from subpixel import SubPixelUpscaling
 
 DENSENET_121_WEIGHTS_PATH = r'https://github.com/titu1994/DenseNet/releases/download/v3.0/DenseNet-BC-121-32.h5'
@@ -794,11 +790,9 @@ def __create_fcn_dense_net(nb_classes, img_input, include_top, nb_dense_block=5,
 
 if __name__ == '__main__':
 
-    from keras.utils.vis_utils import plot_model
     #model = DenseNetFCN((32, 32, 3), growth_rate=16, nb_layers_per_block=[4, 5, 7, 10, 12, 15], upsampling_type='deconv')
     model = DenseNet((32, 32, 3), depth=100, nb_dense_block=3,
                      growth_rate=12, bottleneck=True, reduction=0.5, weights=None)
     model.summary()
 
-    from keras.callbacks import ModelCheckpoint, TensorBoard
     #plot_model(model, 'test.png', show_shapes=True)

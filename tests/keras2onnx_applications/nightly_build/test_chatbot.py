@@ -3,13 +3,16 @@
 import os
 import sys
 import unittest
+from os.path import abspath, dirname
+
 import mock_keras2onnx
 import numpy as np
 from mock_keras2onnx.proto import keras
 from mock_keras2onnx.proto.tfcompat import is_tf2
-from os.path import dirname, abspath
+
 sys.path.insert(0, os.path.join(dirname(abspath(__file__)), '../../keras2onnx_tests/'))
-from test_utils import run_keras_and_ort, test_level_0, get_max_opset_supported_for_test
+from test_utils import get_max_opset_supported_for_test, run_keras_and_ort
+
 K = keras.backend
 
 Activation = keras.layers.Activation

@@ -1,12 +1,21 @@
 # SPDX-License-Identifier: Apache-2.0
 
-import pytest
 import numpy as np
-from mock_keras2onnx.proto.tfcompat import is_tf2, tensorflow as tf
-from mock_keras2onnx.proto import (keras, is_tf_keras,
-                                   is_tensorflow_older_than, is_tensorflow_later_than,
-                                   is_keras_older_than, is_keras_later_than, python_keras_is_deprecated)
-from test_utils import no_loops_in_tf2, all_recurrents_should_bidirectional, convert_keras_for_test as convert_keras, get_max_opset_supported_for_test as get_maximum_opset_supported, get_input_names
+import pytest
+from mock_keras2onnx.proto import (
+    is_keras_later_than,
+    is_keras_older_than,
+    is_tensorflow_later_than,
+    is_tensorflow_older_than,
+    is_tf_keras,
+    keras,
+    python_keras_is_deprecated,
+)
+from mock_keras2onnx.proto.tfcompat import is_tf2
+from mock_keras2onnx.proto.tfcompat import tensorflow as tf
+from test_utils import all_recurrents_should_bidirectional, get_input_names, no_loops_in_tf2
+from test_utils import convert_keras_for_test as convert_keras
+from test_utils import get_max_opset_supported_for_test as get_maximum_opset_supported
 
 K = keras.backend
 Activation = keras.layers.Activation

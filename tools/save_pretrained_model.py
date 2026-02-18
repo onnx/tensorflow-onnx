@@ -4,9 +4,8 @@
 """
 Save pre-trained model.
 """
-import tensorflow as tf
 import numpy as np
-
+import tensorflow as tf
 
 # pylint: disable=redefined-outer-name,reimported,import-outside-toplevel
 
@@ -14,9 +13,10 @@ def save_pretrained_model(sess, outputs, feeds, out_dir, model_name="pretrained"
     """Save pretrained model and config"""
     try:
         import os
-        import sys
-        import tensorflow as tf
         import subprocess
+        import sys
+
+        import tensorflow as tf
         to_onnx_path = "{}/to_onnx".format(out_dir)
         if not os.path.isdir(to_onnx_path):
             os.makedirs(to_onnx_path)

@@ -8,11 +8,12 @@ signal
 import logging
 
 import numpy as np
-from onnx import onnx_pb, helper
+from onnx import helper, onnx_pb
 from onnx.numpy_helper import to_array
+
 from tf2onnx import utils
-from tf2onnx.handler import tf_op
 from tf2onnx.graph_builder import GraphBuilder
+from tf2onnx.handler import tf_op
 
 logger = logging.getLogger(__name__)
 

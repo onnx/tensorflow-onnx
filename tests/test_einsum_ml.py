@@ -5,15 +5,18 @@
 
 import unittest
 from itertools import permutations
+
 import numpy as np
+from backend_test_base import Tf2OnnxBackendTestBase
 from numpy.testing import assert_almost_equal
-from onnx import helper, TensorProto, numpy_helper
+from onnx import TensorProto, helper, numpy_helper
+
+from tf2onnx import constants
 from tf2onnx.optimizer.einsum_optimizer import (
     OnnxMicroRuntime,
+    compute_transposition_features,
     predict_transposition_cost,
-    compute_transposition_features)
-from tf2onnx import constants
-from backend_test_base import Tf2OnnxBackendTestBase
+)
 
 
 class TestEinsumMl(Tf2OnnxBackendTestBase):
