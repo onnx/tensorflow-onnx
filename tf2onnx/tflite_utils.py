@@ -13,44 +13,54 @@ import struct
 from onnx import helper, onnx_pb, numpy_helper
 import tensorflow as tf
 
+# _LazyMod: defers TF API calls to first attribute access (runtime, not import time).
+class _LazyMod:
+    """Resolves attributes via factory functions on first access."""
+    def __init__(self, **factories):
+        object.__setattr__(self, '_fns', factories)
+        object.__setattr__(self, '_cache', {})
+    def __getattr__(self, name):
+        cache = object.__getattribute__(self, '_cache')
+        if name not in cache:
+            cache[name] = object.__getattribute__(self, '_fns')[name]()
+        return cache[name]
+
 try:
     from tensorflow.python.framework import tensor_util
 except ImportError:
-    import types as _types
-    tensor_util = _types.SimpleNamespace(MakeNdarray=tf.make_ndarray)
-    del _types
+    tensor_util = _LazyMod(MakeNdarray=lambda: tf.make_ndarray)
 
 try:
     from tensorflow.core.framework import types_pb2
 except ImportError:
-    import types as _types
-    types_pb2 = _types.SimpleNamespace(
+    import types as _t
+    types_pb2 = _t.SimpleNamespace(
         DT_FLOAT=1, DT_DOUBLE=2, DT_INT32=3, DT_UINT8=4, DT_INT16=5,
         DT_INT8=6, DT_STRING=7, DT_COMPLEX64=8, DT_INT64=9, DT_BOOL=10,
         DT_QUINT8=12, DT_BFLOAT16=14, DT_UINT16=17, DT_COMPLEX128=18,
         DT_HALF=19, DT_RESOURCE=20, DT_VARIANT=21, DT_UINT32=22, DT_UINT64=23,
     )
+    del _t
 
 try:
     from tensorflow.core.framework import node_def_pb2
 except ImportError:
-    import types as _types
-    _gdef = tf.Graph().as_graph_def()
-    _gdef.node.add()
-    node_def_pb2 = _types.SimpleNamespace(NodeDef=type(_gdef.node[0]))
-    del _gdef, _types
+    def _resolve_NodeDef():
+        _gdef = tf.Graph().as_graph_def()
+        _gdef.node.add()
+        return type(_gdef.node[0])
+    node_def_pb2 = _LazyMod(NodeDef=_resolve_NodeDef)
 
 try:
     from tensorflow.core.framework import tensor_pb2
 except ImportError:
-    import types as _types
-    def _dummy_for_tensor_proto():
-        return tf.constant(0, dtype=tf.int32)
-    _tf_fn = tf.function(_dummy_for_tensor_proto)
-    _gdef = _tf_fn.get_concrete_function().graph.as_graph_def()
-    _const = next(n for n in _gdef.node if n.op == 'Const' and 'value' in n.attr)
-    tensor_pb2 = _types.SimpleNamespace(TensorProto=type(_const.attr['value'].tensor))
-    del _dummy_for_tensor_proto, _tf_fn, _gdef, _const, _types
+    def _resolve_TensorProto():
+        def _d():
+            return tf.constant(0, dtype=tf.int32)
+        g = tf.function(_d).get_concrete_function().graph.as_graph_def()
+        c = next(n for n in g.node if n.op == 'Const' and 'value' in n.attr)
+        return type(c.attr['value'].tensor)
+    tensor_pb2 = _LazyMod(TensorProto=_resolve_TensorProto)
 import numpy as np
 from tf2onnx.tflite.TensorType import TensorType as TFLiteTensorType
 from tf2onnx.tflite.Model import Model
