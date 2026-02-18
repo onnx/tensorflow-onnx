@@ -88,9 +88,7 @@ setup(
         "requests",
         "six",
         "flatbuffers>=1.12",
-        "protobuf>=4.25.8,<5.26.0rc1",
-        "protobuf>=5.29.5,<6.30.0rc1",
-        "protobuf>=6.31.1",
+        "protobuf>=4.25.8,!=5.26.*,!=5.27.*,!=5.28.*,!=5.29.0,!=5.29.1,!=5.29.2,!=5.29.3,!=5.29.4,!=6.30.*,!=6.31.0", # CVE-2025-4565
     ],
     classifiers=[
         'Development Status :: 5 - Production/Stable',
