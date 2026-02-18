@@ -9,6 +9,15 @@ SPDX-License-Identifier: Apache-2.0
 tf2onnx converts TensorFlow (tf-1.x or tf-2.x), keras, tensorflow.js and tflite models to ONNX via command 
 line or python api.
 
+## 🛠 Maintainer Wanted
+
+We are currently **looking for a new maintainer** to help support and evolve the `backend-scorecard` project.
+
+If you're passionate about the ONNX standard or contributing to the open source machine learning ecosystem, we'd love to hear from you! This is a great opportunity to contribute to a widely used project and collaborate with the ONNX community.
+
+**To express interest:**  
+Please open an issue or comment on [this thread](https://github.com/onnx/tensorflow-onnx/issues) and let us know about your interest and background.
+
 __Note: tensorflow.js support was just added. While we tested it with many tfjs models from tfhub, it should be considered experimental.__
 
 TensorFlow has many more ops than ONNX and occasionally mapping a model to ONNX creates issues.
