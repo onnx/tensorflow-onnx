@@ -22,6 +22,16 @@ from . import constants
 VERBOSE = 15
 logging.addLevelName(VERBOSE, "VERBOSE")
 
+# Re-export standard level constants so this module can be used as a drop-in
+# for the stdlib `logging` module (e.g. `from tf2onnx import logging; logging.WARNING`).
+DEBUG = logging.DEBUG
+INFO = logging.INFO
+WARNING = logging.WARNING
+WARN = logging.WARN
+ERROR = logging.ERROR
+CRITICAL = logging.CRITICAL
+FATAL = logging.FATAL
+
 
 class Logger(logging.Logger):
     """Custom logger supporting .verbose()."""
