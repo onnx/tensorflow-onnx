@@ -9,7 +9,10 @@ import uuid
 import tensorflow as tf
 from google.protobuf.message import DecodeError
 from packaging.version import Version
-from tensorflow.core.framework import tensor_pb2
+try:
+    from tensorflow.core.framework import tensor_pb2
+except ImportError:
+    from tensorflow.python.framework import tensor_pb2
 from tensorflow.core.protobuf import saved_model_pb2
 from tensorflow.python.ops import lookup_ops
 from tensorflow.python.util import compat

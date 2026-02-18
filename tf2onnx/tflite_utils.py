@@ -11,7 +11,10 @@ import logging
 import struct
 
 from onnx import helper, onnx_pb, numpy_helper
-from tensorflow.core.framework import types_pb2, tensor_pb2, node_def_pb2
+try:
+    from tensorflow.core.framework import types_pb2, tensor_pb2, node_def_pb2
+except ImportError:
+    from tensorflow.python.framework import types_pb2, tensor_pb2, node_def_pb2
 from tensorflow.python.framework import tensor_util
 import tensorflow as tf
 import numpy as np
