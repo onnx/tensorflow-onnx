@@ -20,7 +20,7 @@ except ImportError:
         from tensorflow.python.framework import types_pb2, tensor_pb2, node_def_pb2
     except ImportError:
         import types as _types
-        tensor_pb2 = _types.SimpleNamespace(TensorProto=type(tf.make_tensor_proto(0)))
+        tensor_pb2 = _types.SimpleNamespace(TensorProto=type(tensor_util.make_tensor_proto(0)))
         node_def_pb2 = _types.SimpleNamespace(NodeDef=type(tf.Graph().as_graph_def().node.add()))
         types_pb2 = _types.SimpleNamespace(
             DT_FLOAT=tf.float32.as_datatype_enum,
