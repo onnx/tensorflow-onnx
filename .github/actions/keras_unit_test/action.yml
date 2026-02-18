@@ -1,4 +1,5 @@
 name: Keras2onnx Unit Test Run
+description: Run unit tests for keras2onnx
 
 inputs:
   tf_version:
