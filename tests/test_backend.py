@@ -3864,7 +3864,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, **kwargs)
 
     # @check_opset_min_version(7, "broadcasting op")
-    @unittest.skip("disable it for now, since fold const has bug")
+    
     def test_softmax_cross_entropy_with_logits(self):
         num_class = 5
         data_shape = [100, num_class]
@@ -3873,7 +3873,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             logits_val = np.random.random(data_shape).astype(np.float32)
 
             def func(label, logits):
-                res1 = tf.nn.softmax_cross_entropy_with_logits_v2(labels=label, logits=logits)
+                res1 = tf.nn.softmax_cross_entropy_with_logits(labels=label, logits=logits)
                 return tf.identity(res1, name=_TFOUTPUT)
             self._run_test_case(func, [_OUTPUT], {_INPUT: label_val, _INPUT1: logits_val}, atol=1e-5)
 
