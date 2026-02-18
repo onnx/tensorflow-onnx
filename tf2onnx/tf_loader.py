@@ -110,7 +110,7 @@ logger = logging.getLogger(__name__)
 
 
 def is_tf2():
-    return tf.__version__.startswith("2.")
+    return getattr(tf, '__version__', '2.').startswith("2.")
 
 
 def _not_implemented_tf_placeholder(name):
@@ -157,7 +157,7 @@ if is_tf2():
     tf_gfile = tf.io.gfile
     tf_placeholder = tf.compat.v1.placeholder
     tf_placeholder_with_default = tf.compat.v1.placeholder_with_default
-elif Version(tf.__version__) >= Version("1.13"):
+elif Version(getattr(tf, '__version__', '2.0')) >= Version("1.13"):
     # 1.13 introduced the compat namespace
     tf_reset_default_graph = tf.compat.v1.reset_default_graph
     tf_global_variables = tf.compat.v1.global_variables
