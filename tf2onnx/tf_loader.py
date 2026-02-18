@@ -34,9 +34,64 @@ except ImportError:
         return type(c.attr['value'].tensor)
 
     tensor_pb2 = _LazyMod(TensorProto=_resolve_TensorProto)
-from tensorflow.core.protobuf import saved_model_pb2
-from tensorflow.python.ops import lookup_ops
-from tensorflow.python.util import compat
+
+try:
+    from tensorflow.core.protobuf import saved_model_pb2
+except ImportError:
+    if "_LazyMod" not in dir():
+        class _LazyMod:
+            """Resolves attributes via factory functions on first access."""
+            def __init__(self, **factories):
+                object.__setattr__(self, '_fns', factories)
+                object.__setattr__(self, '_cache', {})
+            def __getattr__(self, name):
+                cache = object.__getattribute__(self, '_cache')
+                if name not in cache:
+                    cache[name] = object.__getattribute__(self, '_fns')[name]()
+                return cache[name]
+
+    def _resolve_SavedModel():
+        from tensorflow.core.protobuf import saved_model_pb2 as _sm  # noqa: PLC0415
+        return _sm.SavedModel
+
+    saved_model_pb2 = _LazyMod(SavedModel=_resolve_SavedModel)
+
+try:
+    from tensorflow.python.ops import lookup_ops
+except ImportError:
+    import importlib as _il
+
+    def _resolve_hash_table_v2():
+        return _il.import_module("tensorflow.python.ops.lookup_ops").hash_table_v2
+
+    def _resolve_lookup_table_export_v2():
+        return _il.import_module("tensorflow.python.ops.lookup_ops").lookup_table_export_v2
+
+    if "_LazyMod" not in dir():
+        class _LazyMod:
+            """Resolves attributes via factory functions on first access."""
+            def __init__(self, **factories):
+                object.__setattr__(self, '_fns', factories)
+                object.__setattr__(self, '_cache', {})
+            def __getattr__(self, name):
+                cache = object.__getattribute__(self, '_cache')
+                if name not in cache:
+                    cache[name] = object.__getattribute__(self, '_fns')[name]()
+                return cache[name]
+
+    lookup_ops = _LazyMod(
+        hash_table_v2=_resolve_hash_table_v2,
+        lookup_table_export_v2=_resolve_lookup_table_export_v2,
+    )
+
+try:
+    from tensorflow.python.util import compat
+except ImportError:
+    import types as _t
+    compat = _t.SimpleNamespace(
+        as_bytes=lambda s: s.encode("utf-8") if isinstance(s, str) else bytes(s),
+    )
+    del _t
 
 from tf2onnx import utils
 from tf2onnx.tf_utils import (
