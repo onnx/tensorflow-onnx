@@ -37,7 +37,7 @@ jobs:
 
       - name: Upload Test Results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: Test Results (Py39-TF2.9-18-ubuntu)
           path: ./**/test-results-*.xml
@@ -64,7 +64,7 @@ jobs:
 
       - name: Upload Test Results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: Test Results (Py310-TF2.15-18-ubuntu)
           path: ./**/test-results-*.xml
@@ -111,7 +111,7 @@ jobs:
 
       - name: Upload Test Results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: Test Results (Py${{ matrix.python_version }}_TF${{ matrix.tf_version }}_${{ matrix.os }}_${{ matrix.opset_version }}_${{ matrix.ort_version }}_${{ matrix.skip_tflite }})
           path: ./**/test-results-*.xml
