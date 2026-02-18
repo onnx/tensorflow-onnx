@@ -22,6 +22,13 @@ ORT_OPSET_VERSION = {
     "1.18.0": 18, "1.19.0": 18, "1.20.0": 18,
 }
 
+def get_input_names(model):
+    """Get input names from a Keras model, compatible with TF 2.12+ where input_names was removed."""
+    if hasattr(model, 'input_names'):
+        return model.input_names
+    return [inp.name.split('/')[0] for inp in model.inputs]
+
+
 working_path = os.path.abspath(os.path.dirname(__file__))
 tmp_path = os.path.join(working_path, 'temp')
 test_level_0 = True

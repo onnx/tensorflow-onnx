@@ -24,6 +24,33 @@ from tf2onnx.tf_utils import compress_graph_def, get_tf_version
 
 
 
+def _get_input_names(model):
+    """Get input names from a Keras model, compatible with old and new Keras."""
+    if hasattr(model, 'input_names'):
+        return model.input_names
+    try:
+        return [inp.name.split('/')[0] for inp in model.inputs]
+    except (AttributeError, IndexError):
+        return None
+
+
+def _get_output_names(model):
+    """Get output names from a Keras model, compatible with old and new Keras."""
+    if hasattr(model, 'output_names'):
+        return model.output_names
+    # Keras in TF 2.12+ removed output_names; derive from output layers
+    try:
+        return [output.name.split('/')[0] for output in model.outputs]
+    except (AttributeError, IndexError):
+        return None
+
+
+def _set_output_names(model, names):
+    """Set output names on a Keras model if supported."""
+    if hasattr(model, 'output_names'):
+        model.output_names = names
+
+
 # pylint: disable=unused-argument
 
 _HELP_TEXT = """
@@ -325,16 +352,17 @@ def _rename_duplicate_keras_model_names(model):
     """
     In very rare cases, keras has a bug where it will give multiple outputs the same name.
     We must edit the model or the TF trace will fail. Returns old_out_names (or None if no edit was made).
-    IMPORTANT: model may be edited. Assign model.output_names to old_out_names to restore.
+    IMPORTANT: model may be edited via _set_output_names to restore.
     """
     old_out_names = None
-    if model.output_names and len(set(model.output_names)) != len(model.output_names):
+    out_names = _get_output_names(model)
+    if out_names and len(set(out_names)) != len(out_names):
         # In very rare cases, keras has a bug where it will give multiple outputs the same name
         # We must edit the model or the TF trace will fail
-        old_out_names = model.output_names
+        old_out_names = out_names
         used_names = set()
         new_out_names = []
-        for name in model.output_names:
+        for name in out_names:
             new_name = name
             i = 0
             while new_name in used_names:
@@ -342,7 +370,7 @@ def _rename_duplicate_keras_model_names(model):
                 new_name = name + "_" + str(i)
             used_names.add(new_name)
             new_out_names.append(new_name)
-        model.output_names = new_out_names
+        _set_output_names(model, new_out_names)
     return old_out_names
 
 
@@ -370,10 +398,12 @@ def _from_keras_tf1(model, opset=None, custom_ops=None, custom_op_handlers=None,
     input_names = [t.name for t in model.inputs]
     output_names = [t.name for t in model.outputs]
     old_out_names = _rename_duplicate_keras_model_names(model)
-    tensors_to_rename = dict(zip(input_names, model.input_names))
-    tensors_to_rename.update(zip(output_names, model.output_names))
+    model_input_names = _get_input_names(model) or [t.name.split('/')[0] for t in model.inputs]
+    model_output_names = _get_output_names(model) or [t.name.split('/')[0] for t in model.outputs]
+    tensors_to_rename = dict(zip(input_names, model_input_names))
+    tensors_to_rename.update(zip(output_names, model_output_names))
     if old_out_names is not None:
-        model.output_names = old_out_names
+        _set_output_names(model, old_out_names)
 
     if _is_legacy_keras_model(model):
         import keras  # pylint: disable=import-outside-toplevel
@@ -486,15 +516,16 @@ def from_keras(model, input_signature=None, opset=None, custom_ops=None, custom_
     tensors_to_rename = tensor_names_from_structed(concrete_func, input_names, output_names)
     reverse_lookup = {v: k for k, v in tensors_to_rename.items()}
 
-    if model.output_names:
-        # model.output_names is an optional field of Keras models indicating output order. It is None if unused.
-        output_names = [reverse_lookup[out] for out in model.output_names]
+    model_out_names = _get_output_names(model)
+    if model_out_names:
+        # model output_names is an optional field of Keras models indicating output order.
+        output_names = [reverse_lookup[out] for out in model_out_names]
     elif isinstance(concrete_func.structured_outputs, dict):
         # Other models specify output order using the key order of structured_outputs
         output_names = [reverse_lookup[out] for out in concrete_func.structured_outputs.keys()]
 
     if old_out_names is not None:
-        model.output_names = old_out_names
+        _set_output_names(model, old_out_names)
 
     with tf.device("/cpu:0"):
         frozen_graph, initialized_tables = \
