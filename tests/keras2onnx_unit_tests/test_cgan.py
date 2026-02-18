@@ -6,6 +6,7 @@ import mock_keras2onnx
 import numpy as np
 from mock_keras2onnx.proto import keras, is_tf_keras, is_tensorflow_older_than
 from tf2onnx.keras2onnx_api import convert_keras
+from test_utils import get_input_names
 from packaging.version import Version
 
 Activation = keras.layers.Activation
@@ -128,4 +129,4 @@ def test_CGAN(runner):
     expected = keras_model.predict([x, y])
     onnx_model = convert_keras(keras_model, keras_model.name)
     assert runner(onnx_model.graph.name, onnx_model,
-                  {keras_model.input_names[0]: x, keras_model.input_names[1]: y}, expected)
+                  {get_input_names(keras_model)[0]: x, get_input_names(keras_model)[1]: y}, expected)
