@@ -1,4 +1,5 @@
 name: Pretrained Model Test Run
+description: Run tests for pretrained models
 
 inputs:
   tf_version:
