@@ -11,12 +11,38 @@ import logging
 import struct
 
 from onnx import helper, onnx_pb, numpy_helper
+import tensorflow as tf
+from tensorflow.python.framework import tensor_util
 try:
     from tensorflow.core.framework import types_pb2, tensor_pb2, node_def_pb2
 except ImportError:
-    from tensorflow.python.framework import types_pb2, tensor_pb2, node_def_pb2
-from tensorflow.python.framework import tensor_util
-import tensorflow as tf
+    try:
+        from tensorflow.python.framework import types_pb2, tensor_pb2, node_def_pb2
+    except ImportError:
+        import types as _types
+        tensor_pb2 = _types.SimpleNamespace(TensorProto=type(tf.make_tensor_proto(0)))
+        node_def_pb2 = _types.SimpleNamespace(NodeDef=type(tf.Graph().as_graph_def().node.add()))
+        types_pb2 = _types.SimpleNamespace(
+            DT_FLOAT=tf.float32.as_datatype_enum,
+            DT_DOUBLE=tf.float64.as_datatype_enum,
+            DT_INT32=tf.int32.as_datatype_enum,
+            DT_UINT8=tf.uint8.as_datatype_enum,
+            DT_INT16=tf.int16.as_datatype_enum,
+            DT_INT8=tf.int8.as_datatype_enum,
+            DT_STRING=tf.string.as_datatype_enum,
+            DT_COMPLEX64=tf.complex64.as_datatype_enum,
+            DT_INT64=tf.int64.as_datatype_enum,
+            DT_BOOL=tf.bool.as_datatype_enum,
+            DT_QUINT8=12,
+            DT_BFLOAT16=tf.bfloat16.as_datatype_enum,
+            DT_UINT16=tf.uint16.as_datatype_enum,
+            DT_COMPLEX128=tf.complex128.as_datatype_enum,
+            DT_HALF=tf.float16.as_datatype_enum,
+            DT_RESOURCE=20,
+            DT_VARIANT=21,
+            DT_UINT32=tf.uint32.as_datatype_enum,
+            DT_UINT64=tf.uint64.as_datatype_enum,
+        )
 import numpy as np
 from tf2onnx.tflite.TensorType import TensorType as TFLiteTensorType
 from tf2onnx.tflite.Model import Model
