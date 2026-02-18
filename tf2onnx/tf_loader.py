@@ -16,7 +16,8 @@ except ImportError:
         from tensorflow.python.framework import tensor_pb2
     except ImportError:
         import types as _types
-        tensor_pb2 = _types.SimpleNamespace(TensorProto=type(tf.make_tensor_proto(0)))
+        from tensorflow.python.framework import tensor_util as _tensor_util
+        tensor_pb2 = _types.SimpleNamespace(TensorProto=type(_tensor_util.make_tensor_proto(0)))
 from tensorflow.core.protobuf import saved_model_pb2
 from tensorflow.python.ops import lookup_ops
 from tensorflow.python.util import compat

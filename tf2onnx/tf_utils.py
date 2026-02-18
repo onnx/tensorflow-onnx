@@ -21,8 +21,9 @@ except ImportError:
         # importable. Derive the protobuf classes from TF's public API instead,
         # and build a types_pb2 namespace from the stable DataType enum values.
         import types as _types
+        from tensorflow.python.framework import tensor_util as _tensor_util
         tensor_pb2 = _types.SimpleNamespace(
-            TensorProto=type(tf.make_tensor_proto(0))
+            TensorProto=type(_tensor_util.make_tensor_proto(0))
         )
         graph_pb2 = _types.SimpleNamespace(
             GraphDef=type(tf.Graph().as_graph_def())
