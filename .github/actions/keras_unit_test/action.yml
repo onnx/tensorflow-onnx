@@ -31,8 +31,7 @@ runs:
           pip install tensorflow==${{ inputs.tf_version }}
           pip install pytest pytest-cov pytest-runner
           pip install onnxruntime==${{ inputs.ort_version }}
-          pip uninstall -y protobuf
-          pip install "protobuf~=3.20"
+          pip install protobuf
           if [[ ${{ inputs.tf_version }} == 1.* ]]; then 
               pip install numpy==1.19.0
           else 

@@ -102,7 +102,7 @@ jobs:
 
   publish-test-results:
     name: "Publish Tests Results to Github"
-    needs: [Test_min_py_with_min_tf, Test_max_py_with_latest_tf, Test_py37_with_tf1_15, Extra_tests]
+    needs: [Test_min_py_with_min_tf, Test_max_py_with_latest_tf, Extra_tests]
     runs-on: ubuntu-latest
     permissions:
       checks: write
