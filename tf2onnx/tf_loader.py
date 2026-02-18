@@ -12,16 +12,28 @@ from packaging.version import Version
 try:
     from tensorflow.core.framework import tensor_pb2
 except ImportError:
-    # tensorflow-intel (Windows) does not expose proto files as importable modules.
-    # Derive TensorProto by tracing a tf.function, which guarantees a real Const node.
-    import types as _types
-    def _dummy_for_tensor_proto():
-        return tf.constant(0, dtype=tf.int32)
-    _tf_fn = tf.function(_dummy_for_tensor_proto)
-    _gdef = _tf_fn.get_concrete_function().graph.as_graph_def()
-    _const = next(n for n in _gdef.node if n.op == 'Const' and 'value' in n.attr)
-    tensor_pb2 = _types.SimpleNamespace(TensorProto=type(_const.attr['value'].tensor))
-    del _dummy_for_tensor_proto, _tf_fn, _gdef, _const, _types
+    # On some TF Windows builds (tensorflow-intel) proto submodules are not importable
+    # during module load because TF's lazy loader hasn't finished initialising yet.
+    # Use a proxy that defers the TF call until first attribute access (at test runtime).
+    class _LazyMod:
+        """Resolves attributes via factory functions on first access."""
+        def __init__(self, **factories):
+            object.__setattr__(self, '_fns', factories)
+            object.__setattr__(self, '_cache', {})
+        def __getattr__(self, name):
+            cache = object.__getattribute__(self, '_cache')
+            if name not in cache:
+                cache[name] = object.__getattribute__(self, '_fns')[name]()
+            return cache[name]
+
+    def _resolve_TensorProto():
+        def _d():
+            return tf.constant(0, dtype=tf.int32)
+        g = tf.function(_d).get_concrete_function().graph.as_graph_def()
+        c = next(n for n in g.node if n.op == 'Const' and 'value' in n.attr)
+        return type(c.attr['value'].tensor)
+
+    tensor_pb2 = _LazyMod(TensorProto=_resolve_TensorProto)
 from tensorflow.core.protobuf import saved_model_pb2
 from tensorflow.python.ops import lookup_ops
 from tensorflow.python.util import compat
