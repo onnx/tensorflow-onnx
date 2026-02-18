@@ -24,10 +24,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
-      - name: Run Tests (Py39-TF2.9)
+      - name: Run Tests (Py39-TF2.12)
         uses: ./.github/actions/keras_application_test
         with:
-          tf_version: '2.9.0'
+          tf_version: '2.12.0'
           python_version: '3.9'
           ort_version: '1.16.3'
           onnx_version: '1.16.1'
@@ -36,7 +36,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: Test Results (Py39-TF2.9-ubuntu)
+          name: Test Results (Py39-TF2.12-ubuntu)
           path: ./**/test-results-*.xml
 
   Test_max_py_with_latest_tf: # Do not change this name because it is used in Ruleset of this repo.
@@ -48,11 +48,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
-      - name: Run Tests (Py310-TF2.15)
+      - name: Run Tests (Py312-TF2.20)
         uses: ./.github/actions/keras_application_test
         with:
-          tf_version: '2.15.0'
-          python_version: '3.10'
+          tf_version: '2.20.0'
+          python_version: '3.12'
           ort_version: '1.16.3'
           onnx_version: '1.16.1'
 
@@ -60,31 +60,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: Test Results (Py310-TF2.15-ubuntu)
-          path: ./**/test-results-*.xml
-
-  Test_py37_with_tf1_15: # Do not change this name because it is used in Ruleset of this repo.
-    strategy:
-      fail-fast: false
-    runs-on: ubuntu-22.04
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-
-      - name: Run Tests (Py37-TF1.15)
-        uses: ./.github/actions/keras_application_test
-        with:
-          tf_version: '1.15.5'
-          python_version: '3.7'
-          ort_version: '1.14.1'
-          onnx_version: '1.14.1'
-
-      - name: Upload Test Results
-        if: always()
-        uses: actions/upload-artifact@v6
-        with:
-          name: Test Results (Py37-TF1.15-ubuntu)
+          name: Test Results (Py312-TF2.20-ubuntu)
           path: ./**/test-results-*.xml
 
   Extra_tests:
