@@ -77,3 +77,9 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tf2onnx/version.py" = ["E", "F", "W", "I"]
 "tf2onnx/tflite*" = ["E", "F", "W", "I"]
+# Probe import used only to test availability of the optional package
+"tests/common.py" = ["F401"]
+# Bare except is intentional (tf.contrib may not exist in TF 2.x)
+"tests/run_pretrained_models.py" = ["E722"]
+# Wildcard import from common is intentional; all exported names are in __all__
+"tests/test_backend.py" = ["F403", "F405"]

@@ -14,7 +14,40 @@ from packaging.version import Version
 try:
     from tensorflow.core.framework import graph_pb2, tensor_pb2, types_pb2
 except ImportError:
-    from tensorflow.python.framework import graph_pb2, tensor_pb2, types_pb2
+    try:
+        from tensorflow.python.framework import graph_pb2, tensor_pb2, types_pb2
+    except ImportError:
+        # TF 2.15+ Windows (tensorflow-intel): proto modules are not individually
+        # importable. Derive the protobuf classes from TF's public API instead,
+        # and build a types_pb2 namespace from the stable DataType enum values.
+        import types as _types
+        tensor_pb2 = _types.SimpleNamespace(
+            TensorProto=type(tf.make_tensor_proto(0))
+        )
+        graph_pb2 = _types.SimpleNamespace(
+            GraphDef=type(tf.Graph().as_graph_def())
+        )
+        types_pb2 = _types.SimpleNamespace(
+            DT_FLOAT=tf.float32.as_datatype_enum,        # 1
+            DT_DOUBLE=tf.float64.as_datatype_enum,       # 2
+            DT_INT32=tf.int32.as_datatype_enum,          # 3
+            DT_UINT8=tf.uint8.as_datatype_enum,          # 4
+            DT_INT16=tf.int16.as_datatype_enum,          # 5
+            DT_INT8=tf.int8.as_datatype_enum,            # 6
+            DT_STRING=tf.string.as_datatype_enum,        # 7
+            DT_COMPLEX64=tf.complex64.as_datatype_enum,  # 8
+            DT_INT64=tf.int64.as_datatype_enum,          # 9
+            DT_BOOL=tf.bool.as_datatype_enum,            # 10
+            DT_QUINT8=12,                                # stable proto enum value
+            DT_BFLOAT16=tf.bfloat16.as_datatype_enum,   # 14
+            DT_UINT16=tf.uint16.as_datatype_enum,        # 17
+            DT_COMPLEX128=tf.complex128.as_datatype_enum, # 18
+            DT_HALF=tf.float16.as_datatype_enum,         # 19
+            DT_RESOURCE=20,                              # stable proto enum value
+            DT_VARIANT=21,                               # stable proto enum value
+            DT_UINT32=tf.uint32.as_datatype_enum,        # 22
+            DT_UINT64=tf.uint64.as_datatype_enum,        # 23
+        )
 from tensorflow.python.framework import tensor_util
 
 from tf2onnx import utils
