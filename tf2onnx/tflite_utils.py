@@ -12,37 +12,45 @@ import struct
 
 from onnx import helper, onnx_pb, numpy_helper
 import tensorflow as tf
-from tensorflow.python.framework import tensor_util
+
 try:
-    from tensorflow.core.framework import types_pb2, tensor_pb2, node_def_pb2
+    from tensorflow.python.framework import tensor_util
 except ImportError:
-    try:
-        from tensorflow.python.framework import types_pb2, tensor_pb2, node_def_pb2
-    except ImportError:
-        import types as _types
-        tensor_pb2 = _types.SimpleNamespace(TensorProto=type(tensor_util.make_tensor_proto(0)))
-        node_def_pb2 = _types.SimpleNamespace(NodeDef=type(tf.Graph().as_graph_def().node.add()))
-        types_pb2 = _types.SimpleNamespace(
-            DT_FLOAT=tf.float32.as_datatype_enum,
-            DT_DOUBLE=tf.float64.as_datatype_enum,
-            DT_INT32=tf.int32.as_datatype_enum,
-            DT_UINT8=tf.uint8.as_datatype_enum,
-            DT_INT16=tf.int16.as_datatype_enum,
-            DT_INT8=tf.int8.as_datatype_enum,
-            DT_STRING=tf.string.as_datatype_enum,
-            DT_COMPLEX64=tf.complex64.as_datatype_enum,
-            DT_INT64=tf.int64.as_datatype_enum,
-            DT_BOOL=tf.bool.as_datatype_enum,
-            DT_QUINT8=12,
-            DT_BFLOAT16=tf.bfloat16.as_datatype_enum,
-            DT_UINT16=tf.uint16.as_datatype_enum,
-            DT_COMPLEX128=tf.complex128.as_datatype_enum,
-            DT_HALF=tf.float16.as_datatype_enum,
-            DT_RESOURCE=20,
-            DT_VARIANT=21,
-            DT_UINT32=tf.uint32.as_datatype_enum,
-            DT_UINT64=tf.uint64.as_datatype_enum,
-        )
+    import types as _types
+    tensor_util = _types.SimpleNamespace(MakeNdarray=tf.make_ndarray)
+    del _types
+
+try:
+    from tensorflow.core.framework import types_pb2
+except ImportError:
+    import types as _types
+    types_pb2 = _types.SimpleNamespace(
+        DT_FLOAT=1, DT_DOUBLE=2, DT_INT32=3, DT_UINT8=4, DT_INT16=5,
+        DT_INT8=6, DT_STRING=7, DT_COMPLEX64=8, DT_INT64=9, DT_BOOL=10,
+        DT_QUINT8=12, DT_BFLOAT16=14, DT_UINT16=17, DT_COMPLEX128=18,
+        DT_HALF=19, DT_RESOURCE=20, DT_VARIANT=21, DT_UINT32=22, DT_UINT64=23,
+    )
+
+try:
+    from tensorflow.core.framework import node_def_pb2
+except ImportError:
+    import types as _types
+    _gdef = tf.Graph().as_graph_def()
+    _gdef.node.add()
+    node_def_pb2 = _types.SimpleNamespace(NodeDef=type(_gdef.node[0]))
+    del _gdef, _types
+
+try:
+    from tensorflow.core.framework import tensor_pb2
+except ImportError:
+    import types as _types
+    def _dummy_for_tensor_proto():
+        return tf.constant(0, dtype=tf.int32)
+    _tf_fn = tf.function(_dummy_for_tensor_proto)
+    _gdef = _tf_fn.get_concrete_function().graph.as_graph_def()
+    _const = next(n for n in _gdef.node if n.op == 'Const' and 'value' in n.attr)
+    tensor_pb2 = _types.SimpleNamespace(TensorProto=type(_const.attr['value'].tensor))
+    del _dummy_for_tensor_proto, _tf_fn, _gdef, _const, _types
 import numpy as np
 from tf2onnx.tflite.TensorType import TensorType as TFLiteTensorType
 from tf2onnx.tflite.Model import Model

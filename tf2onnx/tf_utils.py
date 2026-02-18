@@ -12,44 +12,43 @@ import tensorflow as tf
 from onnx import numpy_helper, onnx_pb
 from packaging.version import Version
 try:
-    from tensorflow.core.framework import graph_pb2, tensor_pb2, types_pb2
+    from tensorflow.core.framework import graph_pb2
 except ImportError:
-    try:
-        from tensorflow.python.framework import graph_pb2, tensor_pb2, types_pb2
-    except ImportError:
-        # TF 2.15+ Windows (tensorflow-intel): proto modules are not individually
-        # importable. Derive the protobuf classes from TF's public API instead,
-        # and build a types_pb2 namespace from the stable DataType enum values.
-        import types as _types
-        from tensorflow.python.framework import tensor_util as _tensor_util
-        tensor_pb2 = _types.SimpleNamespace(
-            TensorProto=type(_tensor_util.make_tensor_proto(0))
-        )
-        graph_pb2 = _types.SimpleNamespace(
-            GraphDef=type(tf.Graph().as_graph_def())
-        )
-        types_pb2 = _types.SimpleNamespace(
-            DT_FLOAT=tf.float32.as_datatype_enum,        # 1
-            DT_DOUBLE=tf.float64.as_datatype_enum,       # 2
-            DT_INT32=tf.int32.as_datatype_enum,          # 3
-            DT_UINT8=tf.uint8.as_datatype_enum,          # 4
-            DT_INT16=tf.int16.as_datatype_enum,          # 5
-            DT_INT8=tf.int8.as_datatype_enum,            # 6
-            DT_STRING=tf.string.as_datatype_enum,        # 7
-            DT_COMPLEX64=tf.complex64.as_datatype_enum,  # 8
-            DT_INT64=tf.int64.as_datatype_enum,          # 9
-            DT_BOOL=tf.bool.as_datatype_enum,            # 10
-            DT_QUINT8=12,                                # stable proto enum value
-            DT_BFLOAT16=tf.bfloat16.as_datatype_enum,   # 14
-            DT_UINT16=tf.uint16.as_datatype_enum,        # 17
-            DT_COMPLEX128=tf.complex128.as_datatype_enum, # 18
-            DT_HALF=tf.float16.as_datatype_enum,         # 19
-            DT_RESOURCE=20,                              # stable proto enum value
-            DT_VARIANT=21,                               # stable proto enum value
-            DT_UINT32=tf.uint32.as_datatype_enum,        # 22
-            DT_UINT64=tf.uint64.as_datatype_enum,        # 23
-        )
-from tensorflow.python.framework import tensor_util
+    import types as _types
+    graph_pb2 = _types.SimpleNamespace(GraphDef=type(tf.Graph().as_graph_def()))
+
+try:
+    from tensorflow.core.framework import types_pb2
+except ImportError:
+    import types as _types
+    # Stable DataType enum values from tensorflow/core/framework/types.proto.
+    # These are defined in TF's protobuf schema and never change between versions.
+    types_pb2 = _types.SimpleNamespace(
+        DT_FLOAT=1, DT_DOUBLE=2, DT_INT32=3, DT_UINT8=4, DT_INT16=5,
+        DT_INT8=6, DT_STRING=7, DT_COMPLEX64=8, DT_INT64=9, DT_BOOL=10,
+        DT_QUINT8=12, DT_BFLOAT16=14, DT_UINT16=17, DT_COMPLEX128=18,
+        DT_HALF=19, DT_RESOURCE=20, DT_VARIANT=21, DT_UINT32=22, DT_UINT64=23,
+    )
+
+try:
+    from tensorflow.core.framework import tensor_pb2
+except ImportError:
+    # tensorflow-intel (Windows) does not expose tensor_pb2 as an importable module.
+    # Derive TensorProto by tracing a tf.function, which guarantees a real Const node.
+    import types as _types
+    def _dummy_for_tensor_proto():
+        return tf.constant(0, dtype=tf.int32)
+    _tf_fn = tf.function(_dummy_for_tensor_proto)
+    _gdef = _tf_fn.get_concrete_function().graph.as_graph_def()
+    _const = next(n for n in _gdef.node if n.op == 'Const' and 'value' in n.attr)
+    tensor_pb2 = _types.SimpleNamespace(TensorProto=type(_const.attr['value'].tensor))
+    del _dummy_for_tensor_proto, _tf_fn, _gdef, _const, _types
+try:
+    from tensorflow.python.framework import tensor_util
+except ImportError:
+    import types as _types
+    tensor_util = _types.SimpleNamespace(MakeNdarray=tf.make_ndarray)
+    del _types
 
 from tf2onnx import utils
 from tf2onnx.utils import is_tf_const_op, make_sure, map_onnx_to_numpy_type, port_name
