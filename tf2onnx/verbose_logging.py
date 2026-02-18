@@ -54,6 +54,11 @@ _BASIC_FORMAT = "%(asctime)s - %(levelname)s - %(message)s"
 _VERBOSE_FORMAT = "%(asctime)s - %(levelname)s - %(name)s: %(message)s"
 
 
+def basicConfig(level: int = logging.INFO, **kwargs) -> None:
+    """Alias for basic_config for stdlib logging compatibility."""
+    basic_config(level=level, **kwargs)
+
+
 def basic_config(level: int = logging.INFO, **kwargs) -> None:
     """Configure root logger and TensorFlow verbosity."""
 
