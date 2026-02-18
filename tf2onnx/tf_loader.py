@@ -140,43 +140,61 @@ except ImportError:
     TfStaticHashTableType = tuple()
     TfTrackableType = tuple()
 
-if is_tf2():
-    convert_variables_to_constants = tf.compat.v1.graph_util.convert_variables_to_constants
-    from tensorflow.python.framework.convert_to_constants import convert_variables_to_constants_v2
-else:
-    from tensorflow.python.framework.graph_util import convert_variables_to_constants
+_UNSET = object()
 
-    convert_variables_to_constants_v2 = _not_implemented_tf_placeholder('convert_variables_to_constants_v2')
 
-if is_tf2():
-    tf_reset_default_graph = tf.compat.v1.reset_default_graph
-    tf_global_variables = tf.compat.v1.global_variables
-    tf_session = tf.compat.v1.Session  # pylint: disable=invalid-name
-    tf_graphdef = tf.compat.v1.GraphDef
-    tf_import_meta_graph = tf.compat.v1.train.import_meta_graph
-    tf_gfile = tf.io.gfile
-    tf_placeholder = tf.compat.v1.placeholder
-    tf_placeholder_with_default = tf.compat.v1.placeholder_with_default
-elif Version(getattr(tf, '__version__', '2.0')) >= Version("1.13"):
-    # 1.13 introduced the compat namespace
-    tf_reset_default_graph = tf.compat.v1.reset_default_graph
-    tf_global_variables = tf.compat.v1.global_variables
-    tf_session = tf.compat.v1.Session  # pylint: disable=invalid-name
-    tf_graphdef = tf.compat.v1.GraphDef
-    tf_import_meta_graph = tf.compat.v1.train.import_meta_graph
-    tf_gfile = tf.gfile
-    tf_placeholder = tf.compat.v1.placeholder
-    tf_placeholder_with_default = tf.compat.v1.placeholder_with_default
-else:
-    # older than 1.13
-    tf_reset_default_graph = tf.reset_default_graph
-    tf_global_variables = tf.global_variables
-    tf_session = tf.Session  # pylint: disable=invalid-name
-    tf_graphdef = tf.GraphDef
-    tf_import_meta_graph = tf.train.import_meta_graph
-    tf_gfile = tf.gfile
-    tf_placeholder = tf.placeholder
-    tf_placeholder_with_default = tf.placeholder_with_default
+class _Lazy:
+    """Proxy that resolves a factory to a target object on first call or attribute access.
+
+    Used to defer TF symbol lookups to runtime, because tensorflow-intel on Windows
+    does not expose tf.compat / tf.io etc. during module import.
+    """
+    def __init__(self, factory):
+        object.__setattr__(self, '_f', factory)
+        object.__setattr__(self, '_v', _UNSET)
+
+    def _resolve(self):
+        v = object.__getattribute__(self, '_v')
+        if v is _UNSET:
+            v = object.__getattribute__(self, '_f')()
+            object.__setattr__(self, '_v', v)
+        return v
+
+    def __call__(self, *args, **kwargs):
+        return self._resolve()(*args, **kwargs)
+
+    def __getattr__(self, name):
+        return getattr(self._resolve(), name)
+
+
+def _has_compat():
+    return is_tf2() or Version(tf.__version__) >= Version("1.13")
+
+
+def _make_convert_variables_to_constants():
+    if is_tf2():
+        return tf.compat.v1.graph_util.convert_variables_to_constants
+    from tensorflow.python.framework.graph_util import convert_variables_to_constants as fn  # noqa: PLC0415
+    return fn
+
+
+def _make_convert_variables_to_constants_v2():
+    if is_tf2():
+        from tensorflow.python.framework.convert_to_constants import convert_variables_to_constants_v2 as fn  # noqa: PLC0415
+        return fn
+    return _not_implemented_tf_placeholder('convert_variables_to_constants_v2')
+
+
+convert_variables_to_constants = _Lazy(_make_convert_variables_to_constants)
+convert_variables_to_constants_v2 = _Lazy(_make_convert_variables_to_constants_v2)
+tf_reset_default_graph = _Lazy(lambda: tf.compat.v1.reset_default_graph if _has_compat() else tf.reset_default_graph)
+tf_global_variables = _Lazy(lambda: tf.compat.v1.global_variables if _has_compat() else tf.global_variables)
+tf_session = _Lazy(lambda: tf.compat.v1.Session if _has_compat() else tf.Session)  # pylint: disable=invalid-name
+tf_graphdef = _Lazy(lambda: tf.compat.v1.GraphDef if _has_compat() else tf.GraphDef)
+tf_import_meta_graph = _Lazy(lambda: tf.compat.v1.train.import_meta_graph if _has_compat() else tf.train.import_meta_graph)
+tf_gfile = _Lazy(lambda: tf.io.gfile if is_tf2() else tf.gfile)
+tf_placeholder = _Lazy(lambda: tf.compat.v1.placeholder if _has_compat() else tf.placeholder)
+tf_placeholder_with_default = _Lazy(lambda: tf.compat.v1.placeholder_with_default if _has_compat() else tf.placeholder_with_default)
 
 
 def inputs_without_resource(sess, input_names):
