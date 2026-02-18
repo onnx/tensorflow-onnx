@@ -24,4 +24,6 @@ updates:
       interval: "monthly"
     cooldown:
       default-days: 7
-    open-pull-requests-l
+        open-pull-requests-l
+    labels:
+      - "github_actions"
