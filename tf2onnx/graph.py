@@ -10,7 +10,6 @@ import copy
 import logging
 
 import numpy as np
-import six
 from onnx import AttributeProto, TensorProto, helper, numpy_helper, shape_inference
 
 from tf2onnx import __version__, constants, git_version, optimizer, utils
@@ -984,7 +983,7 @@ class Graph(object):
 
     def get_shape(self, name):
         """Get shape for node."""
-        utils.make_sure(isinstance(name, six.text_type), "get_shape name is invalid type: %s", name)
+        utils.make_sure(isinstance(name, str), "get_shape name is invalid type: %s", name)
         node = self.get_node_by_output(name, search_in_parent_graphs=True)
         shape = node.graph._output_shapes.get(name) if node else None
         if shape:
@@ -1289,7 +1288,7 @@ class Graph(object):
                 the method is more efficient if *input_index* is specified,
                 otherwise, it has to look for every input named *old_input*.
         """
-        assert isinstance(node, Node) and isinstance(to_be_removed, six.text_type)
+        assert isinstance(node, Node) and isinstance(to_be_removed, str)
         if input_index is not None:
             assert node.input[input_index] == to_be_removed
             if node.input[input_index] in self._output_to_consumers:
@@ -1369,9 +1368,9 @@ class Graph(object):
         Returns:
             node that was inserted
         """
-        utils.make_sure(isinstance(output_name, six.text_type), "output_name's type is not expected: %s",
+        utils.make_sure(isinstance(output_name, str), "output_name's type is not expected: %s",
                         type(output_name))
-        utils.make_sure(isinstance(op_type, six.text_type), "op_type's type is not expected: %s",
+        utils.make_sure(isinstance(op_type, str), "op_type's type is not expected: %s",
                         type(op_type))
         utils.make_sure(output_name is not None, "output_name cannot be None for op_type=%r.", op_type)
 
@@ -1473,7 +1472,7 @@ class Graph(object):
         The method is more efficient if *input_index* is specified.
         Otherwise, it renames every output named *old_input*.
         """
-        assert isinstance(node, Node) and isinstance(old_input, six.text_type) and isinstance(new_input, six.text_type)
+        assert isinstance(node, Node) and isinstance(old_input, str) and isinstance(new_input, str)
         is_replaced = False
         if input_index is None:
             for i, input_name in enumerate(node.input):
@@ -1507,7 +1506,7 @@ class Graph(object):
                 to_ops.remove(old_input)
 
         for input_name in new_inputs:
-            assert isinstance(input_name, six.text_type)
+            assert isinstance(input_name, str)
             self._register_input_name(input_name, node)
 
         node.input = new_inputs

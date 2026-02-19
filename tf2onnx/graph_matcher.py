@@ -18,7 +18,6 @@
 
 from itertools import permutations
 
-import six
 
 
 class OpTypePattern(object):
@@ -108,7 +107,7 @@ class MatchResult(object):
         if isinstance(pattern_or_name, OpTypePattern):
             return pattern_or_name
 
-        if isinstance(pattern_or_name, six.text_type):
+        if isinstance(pattern_or_name, str):
             return self._name_to_pattern.get(pattern_or_name)
 
         raise ValueError('pattern_or_name has type %s. Expect OpTypePattern or str.'

@@ -20,7 +20,6 @@ from collections import namedtuple
 
 import numpy as np
 import PIL.Image
-import six
 import yaml
 from packaging.version import Version
 
@@ -517,7 +516,7 @@ class Test(object):
                     v = self.input_names[k]
                     t = sess.graph.get_tensor_by_name(k)
                     expected_dtype = tf.as_dtype(t.dtype).name
-                    if isinstance(v, six.text_type) and v.startswith("np."):
+                    if isinstance(v, str) and v.startswith("np."):
                         np_value = eval(v)  # pylint: disable=eval-used
                         if expected_dtype != np_value.dtype:
                             logger.warning("dtype mismatch for input %s: expected=%s, actual=%s", k, expected_dtype,
