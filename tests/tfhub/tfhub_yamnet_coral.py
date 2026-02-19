@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 import os
+
 import numpy
-from _tools import generate_random_images, benchmark_tflite
+from _tools import benchmark_tflite, generate_random_images
 
 
 def main(opset=13):

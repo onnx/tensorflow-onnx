@@ -4,14 +4,15 @@
 import io
 import json
 import logging
+
 import numpy as np
+from onnx.helper import make_attribute
 from onnx.numpy_helper import to_array
 from onnx.onnx_pb import TensorProto
-from onnx.helper import make_attribute
-from tf2onnx import constants, handler
-from tf2onnx.handler import tf_op
-from tf2onnx import utils
+
+from tf2onnx import constants, handler, utils
 from tf2onnx.graph_builder import GraphBuilder
+from tf2onnx.handler import tf_op
 
 logger = logging.getLogger(__name__)
 

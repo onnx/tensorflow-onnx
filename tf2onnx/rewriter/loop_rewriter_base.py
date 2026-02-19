@@ -7,13 +7,18 @@ tf2onnx.rewriter.loop_rewriter_base
 
 import logging
 from collections import OrderedDict
-from tf2onnx import utils
-from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
-from tf2onnx.utils import is_tf_loopcond_op, is_tf_tensor_array_op
-from tf2onnx.utils import is_tf_tensor_array_gather_op, is_tf_tensor_array_write_op, is_tf_tensor_array_read_op
-from tf2onnx.rewriter.rnn_utils import REWRITER_RESULT
-from tf2onnx.utils import TensorValueInfo
 
+from tf2onnx import utils
+from tf2onnx.graph_matcher import GraphMatcher, OpTypePattern
+from tf2onnx.rewriter.rnn_utils import REWRITER_RESULT
+from tf2onnx.utils import (
+    TensorValueInfo,
+    is_tf_loopcond_op,
+    is_tf_tensor_array_gather_op,
+    is_tf_tensor_array_op,
+    is_tf_tensor_array_read_op,
+    is_tf_tensor_array_write_op,
+)
 
 logger = logging.getLogger(__name__)
 INVALID_INPUT_ID = utils.make_name("invalid_input_id")

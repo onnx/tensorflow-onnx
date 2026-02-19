@@ -1,4 +1,5 @@
 name: Keras2onnx Unit Test Run
+description: Run unit tests for keras2onnx
 
 inputs:
   tf_version:
@@ -24,29 +25,21 @@ runs:
           python -m pip install --upgrade pip
           pip install onnxconverter-common
           pip install onnx==${{ inputs.onnx_version }}
-          pip install h5py==3.7.0
           pip install parameterized
           pip install timeout-decorator
           pip install coloredlogs flatbuffers
           pip install tensorflow==${{ inputs.tf_version }}
           pip install pytest pytest-cov pytest-runner
           pip install onnxruntime==${{ inputs.ort_version }}
-          pip uninstall -y protobuf
-          pip install "protobuf~=3.20"
-          if [[ ${{ inputs.tf_version }} == 1.* ]]; then 
-              pip install numpy==1.19.0
-          else 
-              pip install "numpy<2"
-          fi
+          pip install "numpy<2"
 
           pip install -e .
 
           echo "----- List all of depdencies:"
           pip freeze --all
 
-    - name: Run keras_unit_test (Linux)
+    - name: Run keras_unit_test
       shell: bash
-      if: runner.os == 'Linux'
       run: |
           python -c "import onnxruntime"
           python -c "import onnxconverter_common"

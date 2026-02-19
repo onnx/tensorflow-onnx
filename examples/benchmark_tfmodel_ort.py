@@ -4,16 +4,18 @@
 The following code compares the speed of tensorflow against onnxruntime
 with a model downloaded from Tensorflow Hub.
 """
-import os
-import sys
-import time
-import tarfile
-import subprocess
 import datetime
+import os
+import subprocess
+import sys
+import tarfile
+import time
+
 import numpy
-from tqdm import tqdm
-import tensorflow_hub as hub
 import onnxruntime as ort
+import tensorflow_hub as hub
+from tqdm import tqdm
+
 from tf2onnx import utils
 
 
@@ -69,7 +71,7 @@ def download_model(url, dest, verbose=True):
             print("Untar %r." % tname)
         tar = tarfile.open(fpath)
         tar.extractall(tname)
-        tar.close()        
+        tar.close()
     return fpath, tname
 
 

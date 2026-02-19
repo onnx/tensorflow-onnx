@@ -2,13 +2,12 @@
 
 """ tf2onnx mapping functions for onnx ml domain. """
 import logging
-import numpy as np
-from onnx import TensorProto
-from onnx import numpy_helper
-from tf2onnx import constants
-from tf2onnx.handler import tf_op
-from tf2onnx import utils
 
+import numpy as np
+from onnx import TensorProto, numpy_helper
+
+from tf2onnx import constants, utils
+from tf2onnx.handler import tf_op
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +43,7 @@ class LookupTableFind:
         in_dtype = ctx.get_dtype(node.input[1])
         utils.make_sure((dtype == TensorProto.INT64 and in_dtype == TensorProto.STRING) or
                         (dtype == TensorProto.STRING and in_dtype == TensorProto.INT64),
-                        f"Only lookup tables of type string<->int64 are currently supported.")
+                        "Only lookup tables of type string<->int64 are currently supported.")
 
         if in_dtype == TensorProto.STRING:
             cats_strings, cats_int64s = initialized_tables[shared_name]

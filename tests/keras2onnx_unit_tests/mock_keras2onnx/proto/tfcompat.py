@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import os
-import tensorflow as _tf
 
+import tensorflow as _tf
 from packaging.version import Version
 
 is_tf2 = Version(_tf.__version__.split('-')[0]) >= Version("2.0.0")

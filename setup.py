@@ -9,8 +9,7 @@ from textwrap import dedent
 
 import setuptools.command.build_py
 import setuptools.command.develop
-import setuptools.command.install
-from setuptools import setup, find_packages, Command
+from setuptools import Command, setup
 
 TOP_DIR = os.path.realpath(os.path.dirname(__file__))
 SRC_DIR = os.path.join(TOP_DIR, 'tf2onnx')
@@ -63,40 +62,12 @@ class develop(setuptools.command.develop.develop):
         setuptools.command.develop.develop.run(self)
 
 
-cmdclass = {
-    'create_version': create_version,
-    'build_py': build_py,
-    'build': build,
-    'develop': develop,
-}
-
 setup(
-    name='tf2onnx',
     version=VersionInfo.version,
-    description='Tensorflow to ONNX converter',
-    setup_requires=['pytest-runner'],
-    tests_require=['graphviz', 'parameterized', 'pytest', 'pytest-cov', 'pyyaml', 'timeout-decorator'],
-    cmdclass=cmdclass,
-    packages=find_packages(),
-    license='Apache License v2.0',
-    author='ONNX',
-    author_email='onnx-technical-discuss@lists.lfaidata.foundation',
-    url='https://github.com/onnx/tensorflow-onnx',
-    install_requires=['numpy>=1.14.1', 'onnx>=1.4.1', 'requests', 'six', 'flatbuffers>=1.12', 'protobuf~=6.33'],
-    classifiers=[
-        'Development Status :: 5 - Production/Stable',
-        'Intended Audience :: Developers',
-        'Intended Audience :: Education',
-        'Intended Audience :: Science/Research',
-        'Topic :: Scientific/Engineering',
-        'Topic :: Scientific/Engineering :: Mathematics',
-        'Topic :: Scientific/Engineering :: Artificial Intelligence',
-        'Topic :: Software Development',
-        'Topic :: Software Development :: Libraries',
-        'Topic :: Software Development :: Libraries :: Python Modules',
-        'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.9',
-        'Programming Language :: Python :: 3.10',
-        'Programming Language :: Python :: 3.11',
-        'Programming Language :: Python :: 3.12']
+    cmdclass={
+        'create_version': create_version,
+        'build_py': build_py,
+        'build': build,
+        'develop': develop,
+    },
 )

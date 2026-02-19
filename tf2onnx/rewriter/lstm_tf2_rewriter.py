@@ -6,13 +6,14 @@ tf2onnx.rewriter.lstm_tf2_rewriter - Rewrites LSTM pattern used by tf2.
 """
 
 import numpy as np
+
+from tf2onnx import utils
+from tf2onnx.graph_builder import GraphBuilder
 from tf2onnx.graph_matcher import GraphMatcher
+from tf2onnx.rewriter.lstm_rewriter import LSTMRewriter
+from tf2onnx.rewriter.lstm_rewriter_base import LSTMContext
 from tf2onnx.rewriter.rnn_utils import make_lstm_pattern
 from tf2onnx.tf_loader import find_function
-from tf2onnx.rewriter.lstm_rewriter_base import LSTMContext
-from tf2onnx.rewriter.lstm_rewriter import LSTMRewriter
-from tf2onnx.graph_builder import GraphBuilder
-from tf2onnx import utils
 
 # pylint: disable=invalid-name,unused-argument,missing-docstring, unused-variable
 

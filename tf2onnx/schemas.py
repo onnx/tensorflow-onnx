@@ -5,13 +5,13 @@
 tf2onnx.schema
 """
 
-import logging
 import copy
-from collections import defaultdict, OrderedDict
-from onnx import defs, helper, TensorProto, OperatorSetIdProto, shape_inference
+import logging
+from collections import OrderedDict, defaultdict
 
-from . import constants
-from . import utils
+from onnx import OperatorSetIdProto, TensorProto, defs, helper, shape_inference
+
+from . import constants, utils
 
 logger = logging.getLogger(__name__)
 

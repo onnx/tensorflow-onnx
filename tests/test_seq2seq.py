@@ -5,9 +5,10 @@
 
 import numpy as np
 import tensorflow as tf
-from tensorflow.python.ops import init_ops
 from backend_test_base import Tf2OnnxBackendTestBase
-from common import unittest_main, check_tf_max_version
+from common import check_tf_max_version, unittest_main
+from tensorflow.python.ops import init_ops
+
 from tf2onnx.tf_loader import is_tf2
 
 # pylint: disable=invalid-name

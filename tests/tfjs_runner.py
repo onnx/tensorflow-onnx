@@ -3,10 +3,10 @@
 
 """Contains tools for running tfjs models. Requires nodejs."""
 
+import base64
+import json
 import os
 import subprocess
-import json
-import base64
 
 import numpy as np
 

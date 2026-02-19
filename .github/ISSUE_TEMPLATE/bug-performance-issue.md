@@ -11,7 +11,6 @@ assignees: ''
 - Add a `--opset` flag with the highest possible opset you can use. Some ops only convert in higher opsets.
 - Try installing the latest tf2onnx from main. Some bug fixes might not have been released to PyPI. Run `pip uninstall tf2onnx` and `pip install git+https://github.com/onnx/tensorflow-onnx`
 - If using a saved model, use the Tensorflow `saved_model_cli` to determine the correct `--tag` and `--signature_def` flags to use. If the signature you need is not listed, use the `--concrete_function` flag to index into the model's defined functions.
-- If your model was made in tf1.x, try running tf2onnx in a venv with tensorflow 1.x installed. tf2.x should be able to read tf1.x models, but sometimes there are bugs.
  -->
 
 **Describe the bug**

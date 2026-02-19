@@ -5,11 +5,13 @@ This example shows how to convert tf functions and keras models using the Python
 It also demonstrates converting saved_models from the command line.
 """
 
-import tensorflow as tf
-import tf2onnx
+import os
+
 import numpy as np
 import onnxruntime as ort
-import os
+import tensorflow as tf
+
+import tf2onnx
 
 ##################### tf function #####################
 

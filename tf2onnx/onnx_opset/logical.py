@@ -8,10 +8,10 @@ logical
 import logging
 
 from onnx import TensorProto
+
 from tf2onnx import utils
 from tf2onnx.handler import tf_op
 from tf2onnx.onnx_opset import common
-
 
 logger = logging.getLogger(__name__)
 

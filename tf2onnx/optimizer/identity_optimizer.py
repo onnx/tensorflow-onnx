@@ -7,7 +7,6 @@
 
 from .optimizer_base import GraphOptimizerBase
 
-
 # pylint: disable=logging-not-lazy,unused-argument,missing-docstring,unused-variable,arguments-differ
 
 

@@ -5,20 +5,18 @@
 
 import os
 import struct
-import numpy as np
+
 import flatbuffers
-
-from common import *  # pylint: disable=wildcard-import,unused-wildcard-import
+import numpy as np
 from backend_test_base import Tf2OnnxBackendTestBase
+from common import *  # pylint: disable=wildcard-import,unused-wildcard-import
 
-from tf2onnx import utils
-from tf2onnx.tfonnx import process_tf_graph
 from tf2onnx import optimizer
-
-from tf2onnx.tflite import Model, OperatorCode, SubGraph, Operator, Tensor, Buffer
+from tf2onnx.tflite import Buffer, Model, Operator, OperatorCode, SubGraph, Tensor
 from tf2onnx.tflite.BuiltinOperator import BuiltinOperator
-from tf2onnx.tflite.TensorType import TensorType
 from tf2onnx.tflite.CustomOptionsFormat import CustomOptionsFormat
+from tf2onnx.tflite.TensorType import TensorType
+from tf2onnx.tfonnx import process_tf_graph
 
 # pylint: disable=missing-docstring
 

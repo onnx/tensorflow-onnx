@@ -1,31 +1,30 @@
 # SPDX-License-Identifier: Apache-2.0
 
+import colorsys
+import inspect
 import os
 import sys
-import inspect
-import colorsys
-import onnx
-import numpy as np
-import tensorflow as tf
+
 import keras
-from PIL import Image, ImageFont, ImageDraw
+import numpy as np
+import onnx
+import tensorflow as tf
 from keras import backend as K
 from keras.layers import Input
 from keras.models import load_model
-from mock_keras2onnx import convert_keras
-from mock_keras2onnx import set_converter
-from mock_keras2onnx.proto import onnx_proto
-from tf2onnx.keras2onnx_api import get_maximum_opset_supported
+from mock_keras2onnx import convert_keras, set_converter
 from onnxconverter_common.onnx_fx import Graph
 from onnxconverter_common.onnx_fx import GraphFunctionType as _Ty
+from PIL import Image, ImageDraw, ImageFont
 
-from os.path import dirname, abspath
+from tf2onnx.keras2onnx_api import get_maximum_opset_supported
+
 yolo3_dir = os.path.join(os.path.dirname(__file__), '../../../keras-yolo3')
 if os.path.exists(yolo3_dir):
     sys.path.insert(0, yolo3_dir)
 
 import yolo3
-from yolo3.model import yolo_body, tiny_yolo_body, yolo_boxes_and_scores
+from yolo3.model import tiny_yolo_body, yolo_body, yolo_boxes_and_scores
 from yolo3.utils import letterbox_image
 
 
