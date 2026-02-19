@@ -49,7 +49,6 @@ class TestKerasApplications(unittest.TestCase):
         self.assertTrue(*res)
 
     def test_InceptionV3(self):
-        keras.backend.set_learning_phase(0)
         InceptionV3 = keras.applications.inception_v3.InceptionV3
         model = InceptionV3(include_top=True)
         res = run_image(model, self.model_files, img_path, target_size=299)

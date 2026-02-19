@@ -771,7 +771,6 @@ def from_keras(model_path, input_names, output_names):
     with tf.device("/cpu:0"):
         if tf.executing_eagerly():
             _keras.backend.clear_session()
-            _keras.backend.set_learning_phase(False)
             keras_model = _keras.models.load_model(model_path, custom_objects)
 
             try:
@@ -795,7 +794,6 @@ def from_keras(model_path, input_names, output_names):
         else:
             # Handles Keras when Eager mode is disabled.
             _keras.backend.clear_session()
-            _keras.backend.set_learning_phase(False)
             keras_model = _keras.models.load_model(model_path, custom_objects)
             # allow to pass inputs and outputs from caller if we don't want all of them
             input_names = keras_model.inputs
