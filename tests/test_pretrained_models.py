@@ -5,6 +5,7 @@
 import os
 
 import pytest
+import requests
 from packaging.version import Version
 
 from run_pretrained_models import Test, load_tests_from_yaml
@@ -47,5 +48,10 @@ def test_pretrained_model(name):
     reason = _skip_reason(test)
     if reason:
         pytest.skip(reason)
-    result = test.run_test(name, backend=_BACKEND, opset=_OPSET)
+    try:
+        result = test.run_test(name, backend=_BACKEND, opset=_OPSET)
+    except requests.exceptions.HTTPError as e:
+        pytest.skip(f"model download failed: {e}")
+    except requests.exceptions.ConnectionError as e:
+        pytest.skip(f"model download failed: {e}")
     assert result, f"Model {name!r} failed conversion or validation"

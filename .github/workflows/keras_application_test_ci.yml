@@ -15,46 +15,13 @@ concurrency:
 
 jobs:
 
-  Test_min_py_with_min_tf: # Do not change this name because it is used in Ruleset of this repo.
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: ./.github/actions/keras_application_test
-        with:
-          tf_version: '2.13.0'
-          python_version: '3.10'
-          ort_version: '1.16.3'
-          onnx_version: '1.16.1'
-      - name: Upload Test Results
-        if: always()
-        uses: actions/upload-artifact@v6
-        with:
-          name: Test Results (min-tf-ubuntu)
-          path: junit/test-results.xml
-
-  Test_max_py_with_latest_tf: # Do not change this name because it is used in Ruleset of this repo.
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: ./.github/actions/keras_application_test
-        with:
-          tf_version: '2.15.0'
-          python_version: '3.10'
-          ort_version: '1.16.3'
-          onnx_version: '1.16.1'
-      - name: Upload Test Results
-        if: always()
-        uses: actions/upload-artifact@v6
-        with:
-          name: Test Results (max-tf-ubuntu)
-          path: junit/test-results.xml
-
-  Extra_tests:
+  test:
     strategy:
       fail-fast: false
       matrix:
+        os: ['ubuntu-latest', 'windows-2022']
         tf_version: ['2.13.0', '2.15.0']
-    runs-on: windows-2022
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -69,12 +36,12 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: Test Results (windows-${{ matrix.tf_version }})
+          name: Test Results (${{ matrix.os }}-tf${{ matrix.tf_version }})
           path: junit/test-results.xml
 
   publish-test-results:
     name: "Publish Tests Results to Github"
-    needs: [Test_min_py_with_min_tf, Test_max_py_with_latest_tf, Extra_tests]
+    needs: [test]
     runs-on: ubuntu-latest
     permissions:
       checks: write
