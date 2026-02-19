@@ -17,7 +17,6 @@ import numpy as np
 import onnx
 import tensorflow as tf
 from common import get_test_config
-from tensorflow.python.ops import lookup_ops
 from tensorflow.python.ops import variables as variables_lib
 from tfjs_runner import run_tfjs
 
@@ -199,6 +198,7 @@ class Tf2OnnxBackendTestBase(unittest.TestCase):
                 for info in table_info:
                     if info.shared_name is None:
                         continue
+                    from tensorflow.python.ops import lookup_ops  # noqa: PLC0415
                     h = lookup_ops.hash_table_v2(info.key_dtype, info.val_dtype, shared_name=info.shared_name)
                     k, v = lookup_ops.lookup_table_export_v2(h, info.key_dtype, info.val_dtype)
                     initialized_tables[info.shared_name] = (sess.run(k), sess.run(v))
