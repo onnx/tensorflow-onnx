@@ -40,7 +40,7 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: Test Results (Py310-TF2.13-18-ubuntu)
-          path: ./**/test-results-*.xml
+          path: junit/test-results.xml
 
   Test_max_py_with_latest_tf: # Do not change this name because it is used in 'publish-test-results' section below.
     strategy:
@@ -67,7 +67,7 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: Test Results (Py310-TF2.15-18-ubuntu)
-          path: ./**/test-results-*.xml
+          path: junit/test-results.xml
 
 
   Extra_tests:  # Do not change this name because it is used in 'publish-test-results' section below.
@@ -110,7 +110,7 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: Test Results (Py${{ matrix.python_version }}_TF${{ matrix.tf_version }}_${{ matrix.os }}_${{ matrix.opset_version }}_${{ matrix.ort_version }}_${{ matrix.skip_tflite }})
-          path: ./**/test-results-*.xml
+          path: junit/test-results.xml
 
   publish-test-results:
     name: "Publish Tests Results to Github"
@@ -129,4 +129,4 @@ jobs:
       - name: Publish Test Results
         uses: EnricoMi/publish-unit-test-result-action@v2
         with:
-          files: "**/pytest*.xml"
+          files: "artifacts/**/*.xml"
