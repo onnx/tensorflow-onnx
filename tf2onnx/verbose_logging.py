@@ -112,8 +112,11 @@ def set_level(level: int) -> None:
 def set_tf_verbosity(level: int) -> None:
     """Control TensorFlow logging verbosity (TF ≥ 2.x)."""
 
-    # TensorFlow Python logging
-    tf.get_logger().setLevel(level)
+    # TensorFlow Python logging (guard against lazy-loader stubs on Windows)
+    try:
+        tf.get_logger().setLevel(level)
+    except AttributeError:
+        pass
 
     # C++ backend logging
     if level <= logging.INFO:
