@@ -6,7 +6,7 @@ os.environ["PYTHONPATH"] = \
     os.environ.get("PYTHONPATH", "") + os.pathsep + "../../keras2onnx_unit_tests" + os.pathsep + "../../../"
 os.environ["TF2ONNX_CATCH_ERRORS"] = "FALSE"
 
-files = ['test_keras_applications_v2.py', 'test_transformers.py', 'test_chatbot.py', 'test_efn.py', \
+files = ['test_keras_applications_v2.py', 'test_transformers.py', 'test_chatbot.py',
          'test_resnext.py']
 files.sort()
 

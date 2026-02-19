@@ -25,8 +25,7 @@ runs:
           python -m pip install --upgrade pip
           pip install onnxconverter-common
           pip install onnx==${{ inputs.onnx_version }}
-          pip install parameterized
-          pip install timeout-decorator
+          pip install parameterized          
           pip install coloredlogs flatbuffers
           pip install tensorflow==${{ inputs.tf_version }}
           pip install onnxruntime==${{ inputs.ort_version }}
@@ -44,7 +43,6 @@ runs:
           pip install keras-resnet
           pip install git+https://www.github.com/keras-team/keras-contrib.git
           pip install keras-tcn==2.8.3
-          pip install git+https://github.com/qubvel/efficientnet
           pip install keras-self-attention
           pip install pytest pytest-cov pytest-runner
           pip install transformers

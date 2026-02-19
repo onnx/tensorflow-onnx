@@ -44,8 +44,7 @@ test = [
     "parameterized",
     "pytest",
     "pytest-cov",
-    "pyyaml",
-    "timeout-decorator",
+    "pyyaml"
 ]
 
 [project.urls]
