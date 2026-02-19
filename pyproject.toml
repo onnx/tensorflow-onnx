@@ -15,8 +15,8 @@ authors = [
     { name = "ONNX", email = "onnx-technical-discuss@lists.lfaidata.foundation" },
 ]
 dependencies = [
-    "numpy>=1.14.1",
-    "onnx>=1.4.1",
+    "numpy>=1.23.5",
+    "onnx>=1.14.0",
     "requests",
     "flatbuffers>=1.12",
     "protobuf>=3.20",
