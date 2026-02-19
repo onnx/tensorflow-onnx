@@ -34,7 +34,7 @@ jobs:
 
       - name: Upload Test Results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: Test Results (Py310-TF2.13-ubuntu)
           path: ./**/test-results-*.xml
@@ -58,11 +58,10 @@ jobs:
 
       - name: Upload Test Results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: Test Results (Py310-TF2.15-ubuntu)
           path: ./**/test-results-*.xml
-
 
   Extra_tests:
     strategy:
@@ -96,7 +95,7 @@ jobs:
           onnx_version: ${{ matrix.onnx_version }}
       - name: Upload Test Results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: Test Results (${{ matrix.python_version }}-${{ matrix.tf_version }}-${{ matrix.os }})
           path: ./**/test-results*.xml
