@@ -8,7 +8,7 @@ import unittest
 import numpy as np
 import tensorflow as tf
 from backend_test_base import Tf2OnnxBackendTestBase
-from common import check_opset_min_version, check_tf_min_version, get_test_config, requires_custom_ops
+from common import check_opset_min_version, check_tf_min_version, requires_custom_ops
 
 from tf2onnx import constants, utils
 
@@ -119,65 +119,11 @@ class StringOpsTests(Tf2OnnxBackendTestBase):
             return tf.identity(mi, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val1, _INPUT1: x_val2})
 
-    @unittest.skipIf(get_test_config().is_windows, "tensorflow-text lacks versions in windows.")
-    @requires_custom_ops("RegexSplitWithOffsets")
-    @check_tf_min_version("2.3", "tensorflow_text")
-    def test_regex_split_with_offsets(self):
-        from tensorflow_text.python.ops.regex_split_ops import gen_regex_split_ops as lib_gen_regex_split_ops
-        text_val = np.array(["a Test 1 2 3 ♠♣",
-                             "Hi there test test ♥♦"], dtype=str)
-        def func(text):
-            tokens, begin_offsets, end_offsets, row_splits = lib_gen_regex_split_ops.regex_split_with_offsets(
-                text, "(\\s)", "")
-            tokens_ = tf.identity(tokens, name=_TFOUTPUT)
-            begin_ = tf.identity(begin_offsets, name=_TFOUTPUT1)
-            end_ = tf.identity(end_offsets, name=_TFOUTPUT2)
-            rows_ = tf.identity(row_splits, name=_TFOUTPUT3)
-            return tokens_, begin_, end_, rows_
-        self._run_test_case(func, [_OUTPUT, _OUTPUT1, _OUTPUT2, _OUTPUT3], {_INPUT: text_val})
-
     def _run_test_case(self, func, output_names_with_port, feed_dict, **kwargs):
         extra_opset = [utils.make_opsetid(constants.CONTRIB_OPS_DOMAIN, 1)]
         process_args = {"extra_opset": extra_opset}
         return self.run_test_case(func, feed_dict, [], output_names_with_port,
                                   use_custom_ops=True, process_args=process_args, **kwargs)
-
-    @requires_custom_ops("WordpieceTokenizer")
-    @check_tf_min_version("2.3", "tensorflow_text")
-    @unittest.skip("Not fixed yet")
-    def test_wordpiece_tokenizer(self):
-        from tensorflow.python.ops import lookup_ops
-        from tensorflow.python.ops.ragged import ragged_tensor
-        from tensorflow_text.python.ops.wordpiece_tokenizer import (
-            gen_wordpiece_tokenizer as lib_gen_wordpiece_tokenizer,
-        )
-
-        def _CreateTable(vocab, num_oov=1):
-            init = tf.lookup.KeyValueTensorInitializer(
-                vocab,
-                tf.range(tf.size(vocab, out_type=tf.int64), dtype=tf.int64),
-                key_dtype=tf.string,
-                value_dtype=tf.int64,
-                name="hasht")
-            return lookup_ops.StaticVocabularyTable(
-                init, num_oov, lookup_key_dtype=tf.string)
-
-        vocab = _CreateTable(["great", "they", "the", "##'", "##re", "##est"])
-        text_val = np.array(["they're", "the", "greatest"], dtype=str)
-
-        def func(text):
-            inputs = ragged_tensor.convert_to_tensor_or_ragged_tensor(text)
-            result = lib_gen_wordpiece_tokenizer.wordpiece_tokenize_with_offsets(
-                inputs, vocab.resource_handle, "##", 200, True, "[UNK]")
-            tokens, begin_offsets, end_offsets, rows = result
-            tokens_ = tf.identity(tokens, name=_TFOUTPUT)
-            begin_ = tf.identity(begin_offsets, name=_TFOUTPUT1)
-            end_ = tf.identity(end_offsets, name=_TFOUTPUT2)
-            rows_ = tf.identity(rows, name=_TFOUTPUT3)
-            return tokens_, begin_, end_, rows_
-        # Fails due to Attempting to capture an EagerTensor without building a function.
-        self._run_test_case(func, [_OUTPUT, _OUTPUT1, _OUTPUT2, _OUTPUT3],
-                            {_INPUT: text_val}, as_session=True)
 
 
 if __name__ == "__main__":

@@ -21,7 +21,6 @@ pip install onnxruntime==$ORT_VERSION
 pip install "numpy<2"
 
 pip install onnxruntime-extensions
-pip install "tensorflow-text<=$TF_VERSION"
 
 pip install tensorflow==$TF_VERSION
 

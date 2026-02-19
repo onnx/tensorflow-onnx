@@ -58,5 +58,5 @@ runs:
       run: |
           python -c "import onnxruntime"
           pytest tests/keras2onnx_unit_tests --doctest-modules --junitxml=junit/test-results.xml
-          cd tests/keras2onnx_applications/nightly_build
+          cd tests/keras2onnx_applications/model_tests
           python run_all_v2.py
