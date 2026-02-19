@@ -41,9 +41,12 @@ class Logger(logging.Logger):
             self._log(VERBOSE, msg, args, **kwargs)
 
 
-logging.setLoggerClass(Logger)
-
-getLogger = logging.getLogger
+def getLogger(name=None):
+    """Return a Logger with .verbose() support without touching the global logger class."""
+    logger = logging.getLogger(name)
+    if not isinstance(logger, Logger):
+        logger.__class__ = Logger
+    return logger
 
 
 # ----------------------------------------------------------------------
