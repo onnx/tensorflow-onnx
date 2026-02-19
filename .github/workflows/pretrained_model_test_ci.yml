@@ -17,6 +17,8 @@ jobs:
 
   test:
     timeout-minutes: 90
+    permissions:
+      actions: write
     strategy:
       fail-fast: false
       matrix:
