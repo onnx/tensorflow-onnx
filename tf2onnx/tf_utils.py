@@ -167,7 +167,18 @@ def get_tf_node_attr(node, name):
 
 
 def get_tf_version():
-    return Version(tf.__version__)
+    try:
+        return Version(tf.__version__)
+    except AttributeError:
+        # On some Windows TF builds (e.g. tensorflow-intel) the lazy loader hasn't
+        # finished initialising at import time, so fall back to package metadata.
+        from importlib.metadata import PackageNotFoundError, version as pkg_version
+        for pkg in ("tensorflow", "tensorflow-intel", "tensorflow-cpu", "tensorflow-gpu"):
+            try:
+                return Version(pkg_version(pkg))
+            except PackageNotFoundError:
+                continue
+        return Version("0.0.0")
 
 def compress_graph_def(graph_def):
     """
