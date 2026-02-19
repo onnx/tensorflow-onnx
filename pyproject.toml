@@ -83,3 +83,5 @@ ignore = [
 "tests/run_pretrained_models.py" = ["E722"]
 # Test files: wildcard imports from common, lambda test helpers, bare excepts, etc.
 "tests/test_*.py" = ["E701", "E722", "E731", "F403", "F405", "F811"]
+# Wildcard import from rewriter is intentional; all exported names are in __all__
+"tf2onnx/tfonnx.py" = ["F403", "F405"]
