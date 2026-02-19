@@ -38,9 +38,8 @@ runs:
           echo "----- List all of depdencies:"
           pip freeze --all
 
-    - name: Run keras_unit_test (Linux)
+    - name: Run keras_unit_test
       shell: bash
-      if: runner.os == 'Linux'
       run: |
           python -c "import onnxruntime"
           python -c "import onnxconverter_common"
