@@ -716,9 +716,11 @@ class Split:
         # T output = Split(int32 split_dim, T value, @int num_split)
         # T outputs = Split(T input, @INT axis, @INTS split)
         split_dims = node.inputs[0].get_tensor_value()
+        new_split_dims = split_dims + len(node.output_shapes[0]) if split_dims < 0 else split_dims
+        new_split_dims = 1 if new_split_dims == 3 else new_split_dims
         ctx.remove_input(node, node.input[0], 0)
         node.set_attr("num_outputs", node.get_attr_int("num_split"))
-        node.set_attr("axis", split_dims)
+        node.set_attr("axis", new_split_dims)
 
     @classmethod
     def version_2(cls, ctx, node, **kwargs):
