@@ -11,7 +11,7 @@ line or python api.
 
 ## 🛠 Maintainer Wanted
 
-We are currently **looking for a new maintainer** to help support and evolve the `backend-scorecard` project.
+We are currently **looking for a new maintainer** to help support and evolve the `tf2onnx` project.
 
 If you're passionate about the ONNX standard or contributing to the open source machine learning ecosystem, we'd love to hear from you! This is a great opportunity to contribute to a widely used project and collaborate with the ONNX community.
 
