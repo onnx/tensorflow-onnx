@@ -24,7 +24,14 @@ jobs:
       matrix:
         os: ['ubuntu-latest', 'windows-2022']
         tf_version: ['2.13.0', '2.15.0']
+        python_version: ['3.10', '3.11']
         opset_version: ['18', '15']
+        exclude:
+          # TF 2.13 supports Python 3.8-3.11 only
+          - tf_version: '2.13.0'
+            python_version: '3.12'
+          - tf_version: '2.13.0'
+            python_version: '3.13'
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v6
@@ -33,7 +40,7 @@ jobs:
       - uses: ./.github/actions/unit_test
         with:
           tf_version: ${{ matrix.tf_version }}
-          python_version: '3.10'
+          python_version: ${{ matrix.python_version }}
           ort_version: '1.16.3'
           onnx_version: '1.16.1'
           opset_version: ${{ matrix.opset_version }}
@@ -42,7 +49,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: Test Results (${{ matrix.os }}-tf${{ matrix.tf_version }}-opset${{ matrix.opset_version }})
+          name: Test Results (${{ matrix.os }}-tf${{ matrix.tf_version }}-py${{ matrix.python_version }}-opset${{ matrix.opset_version }})
           path: junit/test-results.xml
 
   publish-test-results:
