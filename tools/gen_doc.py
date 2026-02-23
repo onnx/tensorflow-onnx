@@ -7,7 +7,6 @@ tool to list tensorflow op to onnx op mapping in markdown
 import argparse
 import inspect
 import re
-
 from collections import OrderedDict
 
 from tf2onnx.handler import tf_op

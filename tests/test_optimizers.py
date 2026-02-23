@@ -4,15 +4,15 @@
 """Unit Tests for optimizers such as TransposeOptimizer."""
 
 import unittest
+
 import numpy as np
-from onnx import helper, numpy_helper, TensorProto, OperatorSetIdProto
+from backend_test_base import Tf2OnnxBackendTestBase
+from common import check_opset_max_version, check_opset_min_version, get_test_config, group_nodes_by_type, unittest_main
+from onnx import OperatorSetIdProto, TensorProto, helper, numpy_helper
 from parameterized import parameterized
 
-from backend_test_base import Tf2OnnxBackendTestBase
-from common import unittest_main, group_nodes_by_type, check_opset_min_version, check_opset_max_version, get_test_config
-from tf2onnx import utils, constants
+from tf2onnx import constants, utils
 from tf2onnx.graph import GraphUtil
-
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test
 

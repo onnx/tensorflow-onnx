@@ -11,122 +11,40 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}-${{ github.event_name == 'workflow_dispatch' }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
 
-  Test_min_py_with_min_tf: # Do not change this name because it is used in Ruleset of this repo.
-    strategy:
-      fail-fast: false
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Run Tests (Py39-TF2.9)
-        uses: ./.github/actions/keras_application_test
-        with:
-          tf_version: '2.9.0'
-          python_version: '3.9'
-          ort_version: '1.16.3'
-          onnx_version: '1.16.1'
-
-      - name: Upload Test Results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: Test Results (Py39-TF2.9-ubuntu)
-          path: ./**/test-results-*.xml
-
-  Test_max_py_with_latest_tf: # Do not change this name because it is used in Ruleset of this repo.
-    strategy:
-      fail-fast: false
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Run Tests (Py310-TF2.15)
-        uses: ./.github/actions/keras_application_test
-        with:
-          tf_version: '2.15.0'
-          python_version: '3.10'
-          ort_version: '1.16.3'
-          onnx_version: '1.16.1'
-
-      - name: Upload Test Results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: Test Results (Py310-TF2.15-ubuntu)
-          path: ./**/test-results-*.xml
-
-  Test_py37_with_tf1_15: # Do not change this name because it is used in Ruleset of this repo.
-    strategy:
-      fail-fast: false
-    runs-on: ubuntu-22.04
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Run Tests (Py37-TF1.15)
-        uses: ./.github/actions/keras_application_test
-        with:
-          tf_version: '1.15.5'
-          python_version: '3.7'
-          ort_version: '1.14.1'
-          onnx_version: '1.14.1'
-
-      - name: Upload Test Results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: Test Results (Py37-TF1.15-ubuntu)
-          path: ./**/test-results-*.xml
-
-  Extra_tests:
+  test:
+    timeout-minutes: 90
+    permissions:
+      actions: write
     strategy:
       fail-fast: false
       matrix:
-        name:
-          - 'py38-tf2.13'
-          - 'py39-tf2.15'
         os: ['ubuntu-latest', 'windows-2022']
-        ort_version: ['1.16.3']
-        onnx_version: ['1.16.1']
-        include:
-          - name: 'py38-tf2.13'
-            tf_version: '2.13.0'
-            python_version: '3.8'
-          - name: 'py39-tf2.15'
-            tf_version: '2.15.0'
-            python_version: '3.9'
+        tf_version: ['2.13.0', '2.15.0']
     runs-on: ${{ matrix.os }}
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Run Tests (Py${{ matrix.python_version }}_TF${{ matrix.tf_version }}_${{ matrix.os }}_${{ matrix.ort_version }})
-        uses: ./.github/actions/keras_application_test
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/keras_application_test
         with:
           tf_version: ${{ matrix.tf_version }}
-          python_version: ${{ matrix.python_version }}
-          ort_version: ${{ matrix.ort_version }}
-          onnx_version: ${{ matrix.onnx_version }}
+          python_version: '3.10'
+          ort_version: '1.16.3'
+          onnx_version: '1.16.1'
       - name: Upload Test Results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
-          name: Test Results (${{ matrix.python_version }}-${{ matrix.tf_version }}-${{ matrix.os }})
-          path: ./**/test-results*.xml
+          name: Test Results (${{ matrix.os }}-tf${{ matrix.tf_version }})
+          path: junit/test-results.xml
 
   publish-test-results:
     name: "Publish Tests Results to Github"
-    needs: [Test_min_py_with_min_tf, Test_max_py_with_latest_tf, Test_py37_with_tf1_15, Extra_tests]
+    needs: [test]
     runs-on: ubuntu-latest
     permissions:
       checks: write
@@ -134,10 +52,9 @@ jobs:
     if: always()
     steps:
       - name: Download Artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: artifacts
-
       - name: Publish Test Results
         uses: EnricoMi/publish-unit-test-result-action@v2
         with:

@@ -7,23 +7,22 @@ tf2onnx.tfjs_utils - utilities for parsing tfjs files into onnx graphs
 Main functions of interest are graphs_from_tfjs and read_tfjs_graph
 """
 
-import json
-import os
 import base64
 import gzip
-import struct
+import json
 import logging
+import os
+import struct
 
-from onnx import numpy_helper, helper
 import numpy as np
-from google.protobuf.json_format import ParseDict
 import tensorflow as tf
+from google.protobuf.json_format import ParseDict
+from onnx import helper, numpy_helper
+from tensorflow.core.framework import node_def_pb2, types_pb2
 from tensorflow.python.framework import c_api_util
-from tensorflow.core.framework import types_pb2, node_def_pb2
 
-from tf2onnx import utils
+from tf2onnx import tf_utils, utils
 from tf2onnx.graph import Graph
-from tf2onnx import tf_utils
 
 logger = logging.getLogger(__name__)
 
@@ -167,7 +166,7 @@ def get_output_dtypes(op_type, tf_attr, inp_dtypes):
 
 def get_output_shapes(node_def, input_dtypes, input_shapes, inp_consts):
     """Returns a list of the output shapes of an op. input_dtypes should be tf dtypes."""
-    from tf2onnx.tf_loader import tf_session, tf_placeholder  # pylint: disable=import-outside-toplevel
+    from tf2onnx.tf_loader import tf_placeholder, tf_session  # pylint: disable=import-outside-toplevel
 
     if node_def.op in ["Prelu", "Enter"]:
         return [input_shapes[0]]

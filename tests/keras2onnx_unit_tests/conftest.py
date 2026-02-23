@@ -1,14 +1,13 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import os
-import pytest
 
 import numpy as np
+import pytest
 import tensorflow as tf
-
-from mock_keras2onnx.proto import keras, is_tf_keras
-from test_utils import run_onnx_runtime
+from mock_keras2onnx.proto import keras
 from mock_keras2onnx.proto.tfcompat import is_tf2
+from test_utils import run_onnx_runtime
 
 K = keras.backend
 

@@ -8,18 +8,19 @@ import unittest
 from itertools import product
 
 import numpy as np
-from numpy.testing import assert_almost_equal
-from packaging.version import Version
 import tensorflow as tf
-
-from tensorflow.python.ops import lookup_ops
 from backend_test_base import Tf2OnnxBackendTestBase
+
 # pylint reports unused-wildcard-import which is false positive, __all__ is defined in common
 from common import *  # pylint: disable=wildcard-import,unused-wildcard-import
+from numpy.testing import assert_almost_equal
+from packaging.version import Version
+from tensorflow.python.ops import lookup_ops
+
 from tf2onnx import constants, utils
-from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
-from tf2onnx.tf_loader import is_tf2, tf_placeholder_with_default, tf_placeholder
+from tf2onnx.graph_matcher import GraphMatcher, OpTypePattern
 from tf2onnx.onnx_opset.signal import make_dft_constant
+from tf2onnx.tf_loader import is_tf2, tf_placeholder, tf_placeholder_with_default
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,function-redefined,cell-var-from-loop
 
@@ -58,8 +59,7 @@ if is_tf2():
     space_to_batch_nd = tf.compat.v1.space_to_batch_nd
     batch_to_space_nd = tf.compat.v1.batch_to_space_nd
     reverse_v2 = tf.compat.v1.reverse_v2
-    random_normal = tf.compat.v1.random_normal
-    random_uniform = tf.compat.v1.random_uniform
+
     fused_batch_norm = tf.compat.v1.nn.fused_batch_norm
     dropout = tf.compat.v1.nn.dropout
     resize_nearest_neighbor = tf.compat.v1.image.resize_nearest_neighbor
@@ -81,8 +81,8 @@ elif Version(tf.__version__) >= Version("1.13"):
     space_to_batch_nd = tf.compat.v1.space_to_batch_nd
     batch_to_space_nd = tf.compat.v1.batch_to_space_nd
     reverse_v2 = tf.compat.v1.reverse_v2
-    random_normal = tf.compat.v1.random_normal
-    random_uniform = tf.compat.v1.random_uniform
+
+
     fused_batch_norm = tf.compat.v1.nn.fused_batch_norm
     dropout = tf.compat.v1.nn.dropout
     quantize_and_dequantize = tf.compat.v1.quantization.quantize_and_dequantize
@@ -105,8 +105,8 @@ else:
     space_to_batch_nd = tf.space_to_batch_nd
     batch_to_space_nd = tf.batch_to_space_nd
     reverse_v2 = tf.reverse_v2
-    random_normal = tf.random_normal
-    random_uniform = tf.random_uniform
+
+
     fused_batch_norm = tf.nn.fused_batch_norm
     dropout = tf.nn.dropout
     resize_nearest_neighbor = tf.image.resize_nearest_neighbor
@@ -309,7 +309,8 @@ class BackendTests(Tf2OnnxBackendTestBase):
     def test_multinomial(self):
         x_val = np.array([[10., 10.]], dtype=np.float32)
         def func(x):
-            op = multinomial(tf.math.log(x), 5, output_dtype=tf.int32)
+            # tf.random.categorical matches the signature (logits, num_samples)
+            op = tf.random.categorical(tf.math.log(x), 5, dtype=tf.int32)
             return tf.identity(op, name=_TFOUTPUT)
 
         # since returned indexes are random we can only check type and shape
@@ -322,7 +323,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         shape = [2, 10]
         x_val = np.ones(np.prod(shape)).astype("float32").reshape(shape)
         def func(x):
-            op = multinomial(x, 2, output_dtype=tf.int32)
+            op = tf.random.categorical(x, 2, dtype=tf.int32)
             return tf.identity(op, name=_TFOUTPUT)
         # since returned indexes are random we can only check type and shape
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, check_value=False,
@@ -2268,7 +2269,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
     def test_randomuniform(self):
         def func():
             shape = tf.constant([2, 3], name="shape")
-            x_ = random_uniform(shape, name="rand", dtype=tf.float32)
+            x_ = tf.random.uniform(shape, dtype=tf.float32, name="rand")
             x_ = tf.identity(x_, name="output1")
             x_ = tf.identity(x_, name="output2")
             return tf.identity(x_, name=_TFOUTPUT)
@@ -2331,7 +2332,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
     def test_randomuniform_int(self):
         def func():
             shape = tf.constant([100, 3], name="shape")
-            x_ = random_uniform(shape, name="rand", dtype=tf.int32, minval=2, maxval=10)
+            x_ = tf.random.uniform(shape, minval=2, maxval=10, dtype=tf.int32, name="rand")
             x_ = tf.identity(x_, name="output1")
             x_ = tf.identity(x_, name="output2")
             return tf.identity(x_, name=_TFOUTPUT)
@@ -2344,7 +2345,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
     def test_randomuniform_int_scalar(self):
         def func():
             shape = tf.constant(np.array([], np.int32), name="shape")
-            x_ = random_uniform(shape, name="rand", dtype=tf.int32, minval=2, maxval=10)
+            x_ = tf.random.uniform(shape, name="rand", dtype=tf.int32, minval=2, maxval=10)
             x_ = tf.identity(x_, name="output1")
             x_ = tf.identity(x_, name="output2")
             return tf.identity(x_, name=_TFOUTPUT)
@@ -2357,7 +2358,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         m_val = np.array(8, dtype=np.int32)
         def func(m):
             shape = tf.constant([100, 3], name="shape")
-            x_ = random_uniform(shape, name="rand", dtype=tf.int32, minval=0, maxval=m)
+            x_ = tf.random.uniform(shape, name="rand", dtype=tf.int32, minval=0, maxval=m)
             x_ = tf.identity(x_, name="output1")
             x_ = tf.identity(x_, name="output2")
             return tf.identity(x_, name=_TFOUTPUT)
@@ -2375,7 +2376,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         m_val = np.array(10, dtype=np.int32)
         def func(n, m):
             shape = tf.constant([100, 3], name="shape")
-            x_ = random_uniform(shape, name="rand", dtype=tf.int32, minval=n, maxval=m)
+            x_ = tf.random.uniform(shape, name="rand", dtype=tf.int32, minval=n, maxval=m)
             x_ = tf.identity(x_, name="output1")
             x_ = tf.identity(x_, name="output2")
             return tf.identity(x_, name=_TFOUTPUT)
@@ -2394,7 +2395,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         m_val = np.array(10, dtype=np.int32)
         s_val = np.array([100, 3], dtype=np.int64)
         def func(n, m, s):
-            x_ = random_uniform(s, name="rand", dtype=tf.int32, minval=n, maxval=m)
+            x_ = tf.random.uniform(s, name="rand", dtype=tf.int32, minval=n, maxval=m)
             x_ = tf.identity(x_, name="output1")
             x_ = tf.identity(x_, name="output2")
             return tf.identity(x_, name=_TFOUTPUT)
@@ -2414,7 +2415,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         # test for dynamic shape coming from a shape op
         x_val = np.array([0, 1, 2, 3, 5], dtype=np.int64)
         def func(x):
-            ret = random_uniform(x[3:], dtype=tf.float32)
+            ret = tf.random.uniform(x[3:], dtype=tf.float32)
             return tf.identity(ret, name=_TFOUTPUT)
         # since results are random, compare the shapes only
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, check_value=False, check_shape=True)
@@ -2426,7 +2427,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         def func(x):
             x_ = tf.identity(x)
             x_ = tf.shape(x_, name="shape")[1:]
-            x_ = random_uniform(x_, name="rand", dtype=tf.float32)
+            x_ = tf.random.uniform(x_, name="rand", dtype=tf.float32)
             x_ = tf.identity(x_)
             return tf.identity(x_, name=_TFOUTPUT)
         # since results are random, compare the shapes only
@@ -3864,7 +3865,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, **kwargs)
 
     # @check_opset_min_version(7, "broadcasting op")
-    @unittest.skip("disable it for now, since fold const has bug")
+
     def test_softmax_cross_entropy_with_logits(self):
         num_class = 5
         data_shape = [100, num_class]
@@ -3873,7 +3874,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
             logits_val = np.random.random(data_shape).astype(np.float32)
 
             def func(label, logits):
-                res1 = tf.nn.softmax_cross_entropy_with_logits_v2(labels=label, logits=logits)
+                res1 = tf.nn.softmax_cross_entropy_with_logits(labels=label, logits=logits)
                 return tf.identity(res1, name=_TFOUTPUT)
             self._run_test_case(func, [_OUTPUT], {_INPUT: label_val, _INPUT1: logits_val}, atol=1e-5)
 
@@ -4930,7 +4931,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
     @check_opset_min_version(11, "Det")
-    @unittest.skip("unclear how this is called in tf-2, fix later")
+
     def test_determinant(self):
         x_val = np.array([1., 2., 3., 4., 1., 2.,
                           2., 1., 1., 3., 3., 1.,
@@ -4938,7 +4939,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
                           2., 1., 1., 3., 3., 1.],
                          dtype=np.float32).reshape((1, 2, 3, 2, 2))
         def func(x):
-            x_ = tf.matrix_determinant(x)
+            x_ = tf.linalg.det(x)
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 

@@ -6,18 +6,63 @@ tf2onnx.tf_utils - misc utilities for tf2onnx that interface with tensorflow
 """
 
 import collections
-from packaging.version import Version
 
 import numpy as np
 import tensorflow as tf
+from onnx import numpy_helper, onnx_pb
+from packaging.version import Version
+# On some TF Windows builds (tensorflow-intel) proto submodules are not importable
+# during module load because TF's lazy loader hasn't finished initialising yet.
+# _LazyMod defers TF calls to first attribute access (at test runtime, not import time).
+class _LazyMod:
+    """Resolves attributes via factory functions on first access."""
+    def __init__(self, **factories):
+        object.__setattr__(self, '_fns', factories)
+        object.__setattr__(self, '_cache', {})
+    def __getattr__(self, name):
+        cache = object.__getattribute__(self, '_cache')
+        if name not in cache:
+            cache[name] = object.__getattribute__(self, '_fns')[name]()
+        return cache[name]
 
-from tensorflow.core.framework import types_pb2, tensor_pb2, graph_pb2
-from tensorflow.python.framework import tensor_util
+try:
+    from tensorflow.core.framework import graph_pb2
+except ImportError:
+    graph_pb2 = _LazyMod(GraphDef=lambda: type(tf.Graph().as_graph_def()))
 
-from onnx import onnx_pb, numpy_helper
+try:
+    from tensorflow.core.framework import types_pb2
+except ImportError:
+    import types as _t
+    # Stable DataType enum values from tensorflow/core/framework/types.proto —
+    # defined in TF's protobuf schema and stable across all TF versions.
+    types_pb2 = _t.SimpleNamespace(
+        DT_FLOAT=1, DT_DOUBLE=2, DT_INT32=3, DT_UINT8=4, DT_INT16=5,
+        DT_INT8=6, DT_STRING=7, DT_COMPLEX64=8, DT_INT64=9, DT_BOOL=10,
+        DT_QUINT8=12, DT_BFLOAT16=14, DT_UINT16=17, DT_COMPLEX128=18,
+        DT_HALF=19, DT_RESOURCE=20, DT_VARIANT=21, DT_UINT32=22, DT_UINT64=23,
+    )
+    del _t
+
+try:
+    from tensorflow.core.framework import tensor_pb2
+except ImportError:
+    def _resolve_TensorProto():
+        def _d():
+            return tf.constant(0, dtype=tf.int32)
+        g = tf.function(_d).get_concrete_function().graph.as_graph_def()
+        c = next(n for n in g.node if n.op == 'Const' and 'value' in n.attr)
+        return type(c.attr['value'].tensor)
+    tensor_pb2 = _LazyMod(TensorProto=_resolve_TensorProto)
+
+try:
+    from tensorflow.python.framework import tensor_util
+except ImportError:
+    tensor_util = _LazyMod(MakeNdarray=lambda: tf.make_ndarray)
 
 from tf2onnx import utils
-from tf2onnx.utils import make_sure, is_tf_const_op, port_name, map_onnx_to_numpy_type
+from tf2onnx.utils import is_tf_const_op, make_sure, map_onnx_to_numpy_type, port_name
+
 from . import logging
 
 logger = logging.getLogger(__name__)
@@ -122,7 +167,18 @@ def get_tf_node_attr(node, name):
 
 
 def get_tf_version():
-    return Version(tf.__version__)
+    try:
+        return Version(tf.__version__)
+    except AttributeError:
+        # On some Windows TF builds (e.g. tensorflow-intel) the lazy loader hasn't
+        # finished initialising at import time, so fall back to package metadata.
+        from importlib.metadata import PackageNotFoundError, version as pkg_version
+        for pkg in ("tensorflow", "tensorflow-intel", "tensorflow-cpu", "tensorflow-gpu"):
+            try:
+                return Version(pkg_version(pkg))
+            except PackageNotFoundError:
+                continue
+        return Version("0.0.0")
 
 def compress_graph_def(graph_def):
     """
@@ -171,7 +227,7 @@ def compute_const_folding_using_tf(g, const_node_values, graph_outputs):
     if const_node_values is None:
         const_node_values = {}
     graph_outputs = set(graph_outputs)
-    from tf2onnx.tf_loader import tf_session, tf_placeholder  # pylint: disable=import-outside-toplevel
+    from tf2onnx.tf_loader import tf_placeholder, tf_session  # pylint: disable=import-outside-toplevel
 
     ops = g.get_operations()
     outputs_to_values = {}
@@ -327,7 +383,7 @@ def replace_placeholders_with_tables(graph_def, placeholder_to_table_info):
 
 def read_tf_node_def_attrs(node_def, input_dtypes, input_shapes):
     """Given a tf node def, returns a dict of attribute names to values"""
-    from tf2onnx.tf_loader import tf_session, tf_placeholder  # pylint: disable=import-outside-toplevel
+    from tf2onnx.tf_loader import tf_placeholder, tf_session  # pylint: disable=import-outside-toplevel
     del node_def.input[:]
     node_def.name = "node"
 

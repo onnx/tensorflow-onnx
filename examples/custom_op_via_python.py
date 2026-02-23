@@ -4,8 +4,9 @@
 A simple example how to map a custom op in python.
 """
 import tensorflow as tf
-import tf2onnx
 from onnx import helper
+
+import tf2onnx
 
 _TENSORFLOW_DOMAIN = "ai.onnx.converters.tensorflow"
 

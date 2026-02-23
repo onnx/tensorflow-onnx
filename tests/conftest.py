@@ -4,6 +4,7 @@
 """ print pytest config."""
 
 from common import get_test_config
+
 from tf2onnx import logging
 
 

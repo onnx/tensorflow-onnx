@@ -1,0 +1,98 @@
+# SPDX-License-Identifier: Apache-2.0
+
+[build-system]
+requires = ["setuptools>=77.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tf2onnx"
+dynamic = ["version"]
+description = "Tensorflow to ONNX converter"
+license = "Apache-2.0"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+    { name = "ONNX", email = "onnx-technical-discuss@lists.lfaidata.foundation" },
+]
+dependencies = [
+    "numpy>=1.23.5",
+    "onnx>=1.14.0",
+    "requests",
+    "flatbuffers>=1.12",
+    "protobuf>=3.20",
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Education",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Mathematics",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+[project.optional-dependencies]
+test = [
+    "graphviz",
+    "parameterized",
+    "pytest",
+    "pytest-cov",
+    "pyyaml"
+]
+
+[project.urls]
+Homepage = "https://github.com/onnx/tensorflow-onnx"
+
+[tool.setuptools.packages.find]
+
+[tool.pytest.ini_options]
+addopts = "--cov=tf2onnx"
+norecursedirs = ["tests/keras2onnx_applications", "tests/keras2onnx_unit_tests"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+
+[tool.ruff.lint]
+select = [
+    "E",  # pycodestyle errors
+    "F",  # pyflakes
+    "W",  # pycodestyle warnings
+    "I",  # isort
+]
+ignore = [
+    "E501",  # line too long (let formatter handle it)
+    "E741",  # ambiguous variable name (too many in codebase)
+    "F841",  # local variable assigned but never used (pylint didn't enforce)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tf2onnx/version.py" = ["E", "F", "W", "I"]
+"tf2onnx/tflite*" = ["E", "F", "W", "I"]
+# Probe import used only to test availability of the optional package
+"tests/common.py" = ["F401", "I001"]
+# Bare except is intentional (tf.contrib may not exist in TF 2.x)
+"tests/run_pretrained_models.py" = ["E722"]
+# Test files: wildcard imports from common, lambda test helpers, bare excepts, etc.
+"tests/test_*.py" = ["E701", "E722", "E731", "F403", "F405", "F811", "I001"]
+# Legacy source files: patterns widespread in existing code, not worth fixing en masse
+"tf2onnx/*.py" = ["E402", "E701", "E722", "E731", "F401", "I001"]
+# Wildcard import from rewriter is intentional; all exported names are in __all__
+"tf2onnx/tfonnx.py" = ["F403", "F405"]
+# __init__.py re-exports: imports are for side-effects / re-export, not direct use
+"tf2onnx/**/__init__.py" = ["F401"]
+# Undefined names are conditional imports or skia-opt codepaths
+"tf2onnx/onnx_opset/nn.py" = ["F821"]
+"tf2onnx/optimizer/einsum_optimizer.py" = ["F821"]
+# Single-line guards are idiomatic in these files
+"tf2onnx/onnx_opset/math.py" = ["E701"]
+"tf2onnx/rewriter/gemm_rewriter.py" = ["E701"]
+# Tools: legacy scripts, bare excepts and redefined logging are intentional
+"tools/*.py" = ["E722", "F811"]

@@ -7,8 +7,10 @@ import os
 import sys
 import unittest
 
-from tf2onnx import convert
 from common import check_tf_min_version
+
+from tf2onnx import convert
+
 
 def run_test_case(args, paths_to_check=None):
     """ run case and clean up """

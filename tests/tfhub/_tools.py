@@ -4,17 +4,17 @@
 The following code compares the speed of tensorflow against onnxruntime
 with a model downloaded from Tensorflow Hub.
 """
-import os
-import sys
-import time
-import tarfile
-import zipfile
-import subprocess
 import datetime
+import os
+import subprocess
+import tarfile
+import time
+import zipfile
 from collections import OrderedDict
+
 import numpy
-from tqdm import tqdm
 import onnxruntime
+from tqdm import tqdm
 
 
 def generate_random_images(shape=(1, 100, 100, 3), n=10, dtype=numpy.float32, scale=255):
@@ -36,7 +36,7 @@ def generate_text_inputs():
     """
     one = OrderedDict([
         ('input_word_ids', numpy.array([[
-            2, 4148, 31, 22, 79, 109, 1854, 3, 0, 0, 0, 
+            2, 4148, 31, 22, 79, 109, 1854, 3, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -108,7 +108,7 @@ def download_model(url, dest, verbose=True):
             print("Untar %r." % tname)
         tar = tarfile.open(fpath)
         tar.extractall(tname)
-        tar.close()        
+        tar.close()
     return fpath, tname
 
 
@@ -369,7 +369,7 @@ def benchmark_tflite(url, dest, onnx_name, opset, imgs, verbose=True, threshold=
 
     # Benchmarks both models.
     ort = onnxruntime.InferenceSession(onnx_name)
-    
+
     if verbose:
         print("ONNX inputs:")
         for a in ort.get_inputs():
@@ -403,8 +403,8 @@ def benchmark_tflite(url, dest, onnx_name, opset, imgs, verbose=True, threshold=
 
     # check intermediate results
     if names is not None:
-        from skl2onnx.helpers.onnx_helper import select_model_inputs_outputs
         import onnx
+        from skl2onnx.helpers.onnx_helper import select_model_inputs_outputs
 
         with open(onnx_name, "rb") as f:
             model_onnx = onnx.load(f)
@@ -425,26 +425,26 @@ def benchmark_tflite(url, dest, onnx_name, opset, imgs, verbose=True, threshold=
         num_results = []
         for name_tfl, name_ort in names:
             index = names_index[name_tfl]
-        
+
             tfl_value = interpreter_details.get_tensor(index[0])
-            
+
             new_name = onnx_name + ".%s.onnx" % name_ort.replace(":", "_").replace(";", "_").replace("/", "_")
             if not os.path.exists(new_name):
                 print('[create onnx model for %r, %r.' % (name_tfl, name_ort))
-                new_model = select_model_inputs_outputs(model_onnx, outputs=[name_ort])            
+                new_model = select_model_inputs_outputs(model_onnx, outputs=[name_ort])
                 with open(new_name, "wb") as f:
                     f.write(new_model.SerializeToString())
 
             ort_inter = onnxruntime.InferenceSession(new_name)
             result = ort_inter.run(None, inputs)[0]
-            
+
             diff = numpy.abs(tfl_value.ravel().astype(numpy.float64) -
                              result.ravel().astype(numpy.float64)).max()
             num_results.append("diff=%f names=(%r,%r) " % (diff, name_tfl, name_ort))
             print("*** diff=%f names=(%r,%r) " % (diff, name_tfl, name_ort))
-            print("    TFL:", tfl_value.dtype, tfl_value.shape, tfl_value.min(), tfl_value.max()) 
-            print("    ORT:", result.dtype, result.shape, result.min(), result.max()) 
-        
+            print("    TFL:", tfl_value.dtype, tfl_value.shape, tfl_value.min(), tfl_value.max())
+            print("    ORT:", result.dtype, result.shape, result.min(), result.max())
+
         print("\n".join(num_results))
 
     results_tfl, duration_tfl = measure_time(call_tflite, imgs)
@@ -454,7 +454,7 @@ def benchmark_tflite(url, dest, onnx_name, opset, imgs, verbose=True, threshold=
         mean_ort = sum(duration_ort) / len(duration_ort)
         mean_tfl = sum(duration_tfl) / len(duration_tfl)
         print("ratio ORT=%r / TF=%r = %r" % (mean_ort, mean_tfl, mean_ort / mean_tfl))
-    
+
     # checks discrepencies
     res = call_tflite(imgs[0])
     res_ort = fct_ort(imgs[0])
@@ -465,6 +465,6 @@ def benchmark_tflite(url, dest, onnx_name, opset, imgs, verbose=True, threshold=
         if output_name not in res:
             raise AssertionError("Unable to find output %r in %r." % (output_name, list(sorted(res))))
         res = res[output_name]
-        
+
     check_discrepencies(res_ort, res, threshold)
     return duration_ort, duration_tf

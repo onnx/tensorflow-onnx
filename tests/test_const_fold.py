@@ -9,7 +9,6 @@ import tensorflow as tf
 from backend_test_base import Tf2OnnxBackendTestBase
 from common import unittest_main
 
-
 # pylint: disable=missing-docstring,invalid-name,unused-argument
 
 # pylint: disable=C0111

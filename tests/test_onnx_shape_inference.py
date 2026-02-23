@@ -4,10 +4,12 @@
 """Unit Tests for shape inference."""
 
 import unittest
+
 import numpy as np
-from onnx import TensorProto
 from backend_test_base import Tf2OnnxBackendTestBase
 from common import *  # pylint: disable=wildcard-import,unused-wildcard-import
+from onnx import TensorProto
+
 from tf2onnx import utils
 from tf2onnx.graph import Graph
 

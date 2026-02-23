@@ -9,7 +9,6 @@ import logging
 
 from tf2onnx import constants
 
-
 logger = logging.getLogger(__name__)
 
 # pylint: disable=unused-argument,missing-docstring

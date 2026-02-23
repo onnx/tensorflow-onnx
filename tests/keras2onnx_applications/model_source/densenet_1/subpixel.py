@@ -3,11 +3,10 @@
 # From https://github.com/titu1994/DenseNet/blob/master/subpixel.py
 # Modifications Copyright (c) Microsoft.
 
-from mock_keras2onnx.proto import keras
 from keras import backend as K
+from keras.backend import normalize_data_format
 from keras.engine import Layer
 from keras.utils.generic_utils import get_custom_objects
-from keras.backend import normalize_data_format
 
 if K.backend() == 'theano':
     import theano_backend as K_BACKEND

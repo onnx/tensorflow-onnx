@@ -1,4 +1,5 @@
 name: Pretrained Model Test Run
+description: Run tests for pretrained models
 
 inputs:
   tf_version:
@@ -40,7 +41,9 @@ runs:
     - name: Run pretrained_model_test
       shell: bash
       run: |
-        # TODO: fix unity model path
-        # python tests/run_pretrained_models.py --backend $CI_ONNX_BACKEND --opset $CI_ONNX_OPSET --config tests/unity.yaml || status=$?
-        python tests/run_pretrained_models.py --backend onnxruntime --opset ${{ inputs.opset_version }} --skip_tf_tests False --skip_tflite_tests ${{ inputs.skip_tflite }} --skip_tfjs_tests True --config tests/run_pretrained_models.yaml || status=$?
-        ls
+        export TF2ONNX_TEST_OPSET=${{ inputs.opset_version }}
+        export TF2ONNX_TEST_BACKEND=onnxruntime
+        export TF2ONNX_SKIP_TFLITE_TESTS=${{ inputs.skip_tflite }}
+        export TF2ONNX_SKIP_TFJS_TESTS=True
+        export TF2ONNX_SKIP_TF_TESTS=False
+        python -m pytest tests/test_pretrained_models.py --disable-pytest-warnings -r s --junitxml=junit/test-results.xml

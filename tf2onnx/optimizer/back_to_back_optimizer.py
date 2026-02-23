@@ -6,7 +6,9 @@
 """
 
 import numpy as np
+
 from tf2onnx.utils import ONNX_DTYPE_NAMES  # lgtm[py/unsafe-cyclic-import]
+
 from .optimizer_base import GraphOptimizerBase  # lgtm[py/unsafe-cyclic-import]
 
 # pylint: disable=logging-not-lazy,unused-argument,missing-docstring,unused-variable,arguments-differ
