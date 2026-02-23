@@ -312,7 +312,27 @@ class TransposeOptimizer(GraphOptimizerBase):
             self._g.set_shape(node.output[0], new_shape)
             self._g.set_shape(trans.output[0], shape)
         return True
-
+    # this is for the case where node has multiple outputs. e.g. split node.
+    def _switch_transpose_and_node_with_multiple_outputs(self, node, trans, update_shape=True):
+        input_index = self._get_input_index_for_trans(node, trans)
+        for idx,_output in enumerate(node.output):
+            shape = self._g.get_shape(_output)
+            nxt_nodes = self._g.find_output_consumers(_output)
+            if idx == 0:
+                transpose = trans
+                self._g.replace_input(node, node.input[input_index], transpose.input[0], input_index)
+                self._g.replace_input(trans, trans.input[0], _output, 0)
+            else:
+                transpose = self._g.make_node("Transpose", [_output], attr={"perm": trans.get_attr_value("perm")})
+            for nxt_node in nxt_nodes:
+                self._g.replace_input(nxt_node, _output, transpose.output[0])
+                
+            if update_shape and shape:
+                perm_inv = invert_perm(transpose.get_attr_value("perm"))
+                new_shape = [shape[i] for i in perm_inv]
+                self._g.set_shape(_output, new_shape)
+                self._g.set_shape(transpose.output[0], shape)
+        return True
     # if return value is True, then it means Transpose is handled as designed
     # otherwise, it means that we skip handling since it is not in our support set
     def _handle_nhwc_tranpose(self, trans):
@@ -694,6 +714,21 @@ class TransposeOptimizer(GraphOptimizerBase):
                 new_axes_np = np.array(split, dtype=np.int64)
                 new_axes_const = self._g.make_const(utils.make_name(node.inputs[1].name), new_axes_np)
                 self._g.replace_inputs(node, [node.input[0], new_axes_const.output[0]])
+            return True
+        # handling having branches
+        if len(node.output) > 1:
+            trans_rank = get_transpose_rank(trans)
+            axes = node.get_attr_value("axis", 0)
+            perm = trans.get_attr("perm").ints
+            axes = [axes + trans_rank if axes < 0 else axes]
+            if split:
+                new_axes_np = np.array(split, dtype=np.int64)
+                new_axes_const = self._g.make_const(utils.make_name(node.inputs[1].name), new_axes_np)
+            # [Transpose -> Split -> next_nodes] -> [Split -> Transpose -> next_nodes]
+            if not self._switch_transpose_and_node_with_multiple_outputs(node, trans, 1):
+                return False
+            new_axes = [perm[a] for a in axes]
+            node.set_attr("axes", new_axes)
             return True
         return False
 
