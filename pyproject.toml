@@ -55,6 +55,9 @@ Homepage = "https://github.com/onnx/tensorflow-onnx"
 [tool.pytest.ini_options]
 addopts = "--cov=tf2onnx"
 norecursedirs = ["tests/keras2onnx_applications", "tests/keras2onnx_unit_tests"]
+filterwarnings = [
+    "ignore:.*AtomicFunction.*:pytest.PytestUnraisableExceptionWarning",
+]
 
 [tool.ruff]
 target-version = "py310"

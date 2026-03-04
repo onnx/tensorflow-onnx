@@ -2310,7 +2310,6 @@ def test_shared_embed(runner):
 
 
 def test_recursive_model(runner):
-    keras.backend.set_learning_phase(0)
 
     N, C, D = 2, 3, 3
     x = np.random.rand(N, C).astype(np.float32, copy=False)
@@ -2337,7 +2336,6 @@ def test_recursive_model(runner):
 
 
 def test_recursive_and_shared_model(runner):
-    keras.backend.set_learning_phase(0)
     N, C, D = 2, 3, 3
     x = np.random.rand(N, C).astype(np.float32, copy=False)
 
@@ -2371,7 +2369,6 @@ def test_recursive_and_shared_model(runner):
 @pytest.mark.skipif(is_keras_older_than("2.2.4"),
                     reason="Low keras version is not supported.")
 def test_shared_model_2(runner):
-    K.set_learning_phase(0)
 
     def _conv_layer(input, filters, kernel_size, relu_flag=False, strides=1, dilation_rate=1):
         padding = 'same' if strides == 1 else 'valid'

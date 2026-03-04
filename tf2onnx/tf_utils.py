@@ -236,10 +236,10 @@ def compute_const_folding_using_tf(g, const_node_values, graph_outputs):
     shape_node_outputs = {}
 
     def is_small_shape(x):
-        return np.product(x) <= 1000
+        return np.prod(x) <= 1000
 
     def is_huge_shape(x):
-        return np.product(x) >= 1000000
+        return np.prod(x) >= 1000000
 
     for node in ops:
         # Load values of constants. Use const_node_values if possible
