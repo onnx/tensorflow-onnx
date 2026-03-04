@@ -15,13 +15,8 @@ echo "==== TensorFlow version: $TF_VERSION"
 echo "==== ONNXRuntime version: $ORT_VERSION"
 echo "==== ONNX version: $ONNX_VERSION"
 
+pip install "numpy<2" onnx==$ONNX_VERSION onnxruntime==$ORT_VERSION onnxruntime-extensions
 pip install pytest pytest-cov pytest-runner coverage graphviz requests pyyaml pillow pandas parameterized sympy coloredlogs flatbuffers timeout-decorator
-pip install onnx==$ONNX_VERSION
-pip install onnxruntime==$ORT_VERSION
-pip install "numpy<2"
-
-pip install onnxruntime-extensions
-
 pip install tensorflow==$TF_VERSION
 
 pip install -e .

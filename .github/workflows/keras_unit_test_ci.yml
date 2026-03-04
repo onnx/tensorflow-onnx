@@ -1,4 +1,4 @@
-name: Keras2onnx Unit Test (CI)
+name: Keras Unit Test
 
 on:
   pull_request:
