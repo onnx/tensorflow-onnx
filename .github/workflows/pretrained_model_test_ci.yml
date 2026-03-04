@@ -1,4 +1,4 @@
-name: Pretrained Model Test (CI)
+name: Pretrained Model Test
 
 on:
   pull_request:

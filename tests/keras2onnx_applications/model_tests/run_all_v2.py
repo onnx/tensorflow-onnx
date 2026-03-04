@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import os
+import subprocess
+import sys
 
 os.environ["PYTHONPATH"] = \
     os.environ.get("PYTHONPATH", "") + os.pathsep + "../../keras2onnx_unit_tests" + os.pathsep + "../../../"
@@ -12,12 +14,12 @@ files.sort()
 
 res_final = True
 for f_ in files:
-    res = os.system("pytest " + f_ +  " --no-cov "
-                    "--doctest-modules --junitxml=junit/test-results-" + f_[5:-3] + ".xml")
-    if res > 0:
+    res = subprocess.run(
+        [sys.executable, "-m", "pytest", f_, "--no-cov",
+         "--doctest-modules", f"--junitxml=junit/test-results-{f_[5:-3]}.xml"],
+        check=False
+    )
+    if res.returncode != 0:
         res_final = False
 
-if res_final:
-    assert(True)
-else:
-    assert(False)
+sys.exit(0 if res_final else 1)
