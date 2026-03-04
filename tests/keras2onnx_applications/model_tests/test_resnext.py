@@ -4,6 +4,16 @@ import os
 import sys
 import unittest
 
+def _log_memory(label):
+    try:
+        with open('/proc/self/status') as f:
+            for line in f:
+                if line.startswith('VmRSS:'):
+                    print(f"\n[MEM] {label}: {line.strip()}", flush=True)
+                    break
+    except OSError:
+        pass
+
 from mock_keras2onnx.proto import keras
 from mock_keras2onnx.proto.tfcompat import is_tf2
 
@@ -341,6 +351,7 @@ class TestResNext(unittest.TestCase):
                      "This is a tf2 model.")
     def test_ResNext(self):
         K.clear_session()
+        _log_memory("test_ResNext start")
         input_shape = (112, 112, 3)
         depth = 29
         cardinality = 8
@@ -357,7 +368,9 @@ class TestResNext(unittest.TestCase):
         inputs = img_input
 
         keras_model = Model(inputs, x, name='resnext')
+        _log_memory("test_ResNext model built")
         res = run_image(keras_model, self.model_files, img_path, atol=5e-3, target_size=112)
+        _log_memory("test_ResNext run_image done")
         self.assertTrue(*res)
 
     # Model from https://github.com/titu1994/keras-squeeze-excite-network
@@ -365,6 +378,7 @@ class TestResNext(unittest.TestCase):
                      "This is a tf2 model.")
     def test_SEResNext(self):
         K.clear_session()
+        _log_memory("test_SEResNext start")
         input_shape = (112, 112, 3)
         depth = 29
         cardinality = 8
@@ -381,7 +395,9 @@ class TestResNext(unittest.TestCase):
         inputs = img_input
 
         keras_model = Model(inputs, x, name='se_resnext')
+        _log_memory("test_SEResNext model built")
         res = run_image(keras_model, self.model_files, img_path, atol=5e-3, target_size=112)
+        _log_memory("test_SEResNext run_image done")
         self.assertTrue(*res)
 
 
