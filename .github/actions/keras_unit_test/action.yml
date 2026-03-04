@@ -23,15 +23,13 @@ runs:
       shell: bash
       run: |
           python -m pip install --upgrade pip
+          pip install "numpy<2" onnx==${{ inputs.onnx_version }} onnxruntime==${{ inputs.ort_version }}
           pip install onnxconverter-common
-          pip install onnx==${{ inputs.onnx_version }}
           pip install parameterized
           pip install timeout-decorator
           pip install coloredlogs flatbuffers
           pip install tensorflow==${{ inputs.tf_version }}
           pip install pytest pytest-cov pytest-runner
-          pip install onnxruntime==${{ inputs.ort_version }}
-          pip install "numpy<2"
 
           pip install -e .
 
