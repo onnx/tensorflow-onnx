@@ -1,11 +1,13 @@
 # SPDX-License-Identifier: Apache-2.0
 import os
+
 import numpy
 import onnxruntime as ort
 import tensorflow as tf
 import tensorflow_hub as hub
+from _tools import generate_random_images
+
 import tf2onnx
-from _tools import generate_random_images, check_discrepencies
 
 imgs = generate_random_images(shape=(1, 224, 224, 3), scale=1.)
 

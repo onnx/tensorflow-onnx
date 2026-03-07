@@ -6,7 +6,9 @@
 """
 
 from onnx import TensorProto
+
 from tf2onnx.graph_builder import GraphBuilder
+
 from .optimizer_base import GraphOptimizerBase
 
 # pylint: disable=logging-not-lazy,unused-argument,missing-docstring

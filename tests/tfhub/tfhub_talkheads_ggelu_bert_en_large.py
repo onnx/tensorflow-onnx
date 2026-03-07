@@ -1,9 +1,10 @@
 # SPDX-License-Identifier: Apache-2.0
 import os
 from collections import OrderedDict
+
 import numpy
 import numpy.random as rnd
-from _tools import generate_random_images, benchmark
+from _tools import benchmark
 
 
 def main(opset=13):

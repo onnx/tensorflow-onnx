@@ -4,18 +4,18 @@
 """Unit Tests for Tensorflow shape inference."""
 
 import os
+
 import numpy as np
 import tensorflow as tf
-
-from tensorflow.python.ops import variables as variables_lib
-from tensorflow.python.ops import init_ops
-
 from backend_test_base import Tf2OnnxBackendTestBase
 from common import *  # pylint: disable=wildcard-import, unused-wildcard-import
+from tensorflow.python.ops import init_ops
+from tensorflow.python.ops import variables as variables_lib
+
 from tf2onnx import utils
-from tf2onnx.tf_utils import get_tf_tensor_shape
 from tf2onnx.shape_inference import infer_shape_for_graph
-from tf2onnx.tf_loader import tf_reset_default_graph, tf_session, tf_placeholder, tf_optimize
+from tf2onnx.tf_loader import tf_optimize, tf_placeholder, tf_reset_default_graph, tf_session
+from tf2onnx.tf_utils import get_tf_tensor_shape
 
 # pylint: disable=missing-docstring
 

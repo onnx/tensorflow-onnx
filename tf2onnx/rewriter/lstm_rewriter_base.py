@@ -13,10 +13,10 @@ import logging
 
 from tf2onnx import utils
 from tf2onnx.graph_builder import GraphBuilder
+from tf2onnx.graph_matcher import GraphMatcher
 from tf2onnx.rewriter.loop_rewriter_base import LoopRewriterBase
 from tf2onnx.rewriter.rnn_utils import get_pattern
-from tf2onnx.graph_matcher import GraphMatcher
-from tf2onnx.rewriter.unit_rnn_rewriter_base import UnitRnnRewriterBase, UnitRnnContext
+from tf2onnx.rewriter.unit_rnn_rewriter_base import UnitRnnContext, UnitRnnRewriterBase
 
 logger = logging.getLogger(__name__)
 

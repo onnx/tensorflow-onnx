@@ -5,8 +5,7 @@
 tf2onnx.rewriter - rewrite tensorflow subgraph to onnx leakyrelu op
 """
 
-from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
-
+from tf2onnx.graph_matcher import GraphMatcher, OpTypePattern
 
 # pylint: disable=missing-docstring
 

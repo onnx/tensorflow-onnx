@@ -6,9 +6,9 @@ tf2onnx.rewrite - Rewrites a pattern from the tf layer_norm contrib op.
 Converts a mean/variance normalization pattern (using ReduceMean, RSqrt, Sub, Mul, etc.) into InstanceNormalization
 """
 from onnx import TensorProto, helper
-from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
-from tf2onnx.graph_builder import GraphBuilder
 
+from tf2onnx.graph_builder import GraphBuilder
+from tf2onnx.graph_matcher import GraphMatcher, OpTypePattern
 
 # pylint: disable=missing-docstring
 

@@ -9,14 +9,14 @@ import logging
 import sys
 
 import numpy as np
-from onnx import onnx_pb, helper
+from onnx import helper, onnx_pb
 from onnx.onnx_pb import TensorProto
 
 from tf2onnx import constants, utils
+from tf2onnx.constants import NCHW_TO_NHWC, NHWC_TO_NCHW
 from tf2onnx.graph_builder import GraphBuilder
 from tf2onnx.handler import tf_op
-from tf2onnx.onnx_opset import nn, math
-from tf2onnx.constants import NCHW_TO_NHWC, NHWC_TO_NCHW
+from tf2onnx.onnx_opset import math, nn
 
 logger = logging.getLogger(__name__)
 

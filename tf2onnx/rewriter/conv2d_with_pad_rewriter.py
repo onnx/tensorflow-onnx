@@ -8,7 +8,7 @@ tf2onnx.rewriter - rewrite tensorflow subgraph to onnx condv2 op with pad
 import numpy as np
 
 from tf2onnx import handler, logging
-from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
+from tf2onnx.graph_matcher import GraphMatcher, OpTypePattern
 
 logger = logging.getLogger(__name__)
 

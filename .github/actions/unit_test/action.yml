@@ -1,4 +1,5 @@
 name: Unit Test Run
+description: Unit test run
 
 inputs:
   tf_version:
@@ -24,9 +25,13 @@ runs:
 
     - name: Install dependencies (TF-v${{ inputs.tf_version }})
       shell: bash
+      env:
+        TF_VERSION: ${{ inputs.tf_version }}
+        ORT_VERSION: ${{ inputs.ort_version }}
+        ONNX_VERSION: ${{ inputs.onnx_version }}
       run: |
         chmod +x ./tests/utils/setup_test_env.sh
-        ./tests/utils/setup_test_env.sh ${{ inputs.tf_version }} ${{ inputs.ort_version }} ${{ inputs.onnx_version }}
+        ./tests/utils/setup_test_env.sh "$TF_VERSION" "$ORT_VERSION" "$ONNX_VERSION"
 
     - name: Fix Paths (Windows only)
       shell: pwsh
@@ -40,10 +45,13 @@ runs:
     - name: Run unit_test (Linux)
       shell: bash
       if: runner.os == 'Linux'
+      env:
+        TF2ONNX_TEST_OPSET: ${{ inputs.opset_version }}
+        TF2ONNX_SKIP_TFLITE_TESTS: ${{ inputs.skip_tflite }}
       run: |
         export TF2ONNX_TEST_BACKEND=onnxruntime
-        export TF2ONNX_TEST_OPSET=${{ inputs.opset_version }}
-        export TF2ONNX_SKIP_TFLITE_TESTS=${{ inputs.skip_tflite }}
+        export TF2ONNX_TEST_OPSET
+        export TF2ONNX_SKIP_TFLITE_TESTS
         export TF2ONNX_SKIP_TFJS_TESTS=True
         export TF2ONNX_SKIP_TF_TESTS=False
         python -m pytest --cov=tf2onnx --cov-report=term --disable-pytest-warnings -r s tests --cov-append --junitxml=junit/test-results.xml
@@ -52,11 +60,12 @@ runs:
     - name: Run unit_test (Windows)
       shell: pwsh
       if: runner.os == 'Windows'
+      env:
+        TF2ONNX_TEST_OPSET: ${{ inputs.opset_version }}
+        TF2ONNX_SKIP_TFLITE_TESTS: ${{ inputs.skip_tflite }}
       run: |
-        set TF2ONNX_TEST_BACKEND=onnxruntime
-        set TF2ONNX_TEST_OPSET=${{ inputs.opset_version }}
-        set TF2ONNX_SKIP_TFLITE_TESTS=${{ inputs.skip_tflite }}
-        set TF2ONNX_SKIP_TFJS_TESTS=True
-        set TF2ONNX_SKIP_TF_TESTS=False
+        $env:TF2ONNX_TEST_BACKEND = "onnxruntime"
+        $env:TF2ONNX_SKIP_TFJS_TESTS = "True"
+        $env:TF2ONNX_SKIP_TF_TESTS = "False"
         python -m pytest --cov=tf2onnx --cov-report=term --disable-pytest-warnings -r s tests --cov-append --junitxml=junit/test-results.xml
         ls

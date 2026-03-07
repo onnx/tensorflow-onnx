@@ -7,8 +7,7 @@ import json
 import unittest
 
 import numpy as np
-
-from tfjs_runner import numpy_to_json, json_to_numpy
+from tfjs_runner import json_to_numpy, numpy_to_json
 
 # pylint: disable=missing-docstring
 

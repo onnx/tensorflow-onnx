@@ -8,6 +8,7 @@
 
 import argparse
 import os
+import random
 import re
 import shutil
 import sys
@@ -15,17 +16,12 @@ import tarfile
 import tempfile
 import time
 import zipfile
-import random
-
 from collections import namedtuple
-import six
-from packaging.version import Version
 
-
-import yaml
 import numpy as np
 import PIL.Image
-
+import yaml
+from packaging.version import Version
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 import tensorflow as tf
@@ -39,15 +35,16 @@ except:  # pylint: disable=bare-except
     pass
 
 try:
-    import tensorflow_text  # pylint: disable=unused-import
+    pass  # pylint: disable=unused-import
 except Exception as err:
     pass
 
-from tf2onnx import tf_loader, logging, optimizer, utils, tf_utils, constants
-from tf2onnx.tfonnx import process_tf_graph
-from tf2onnx.tf_loader import tf_session, tf_reset_default_graph
-from tf2onnx.graph import ExternalTensorStorage
 from tfjs_runner import run_tfjs
+
+from tf2onnx import constants, logging, optimizer, tf_loader, tf_utils, utils
+from tf2onnx.graph import ExternalTensorStorage
+from tf2onnx.tf_loader import tf_reset_default_graph, tf_session
+from tf2onnx.tfonnx import process_tf_graph
 
 logger = logging.getLogger("run_pretrained")
 
@@ -519,7 +516,7 @@ class Test(object):
                     v = self.input_names[k]
                     t = sess.graph.get_tensor_by_name(k)
                     expected_dtype = tf.as_dtype(t.dtype).name
-                    if isinstance(v, six.text_type) and v.startswith("np."):
+                    if isinstance(v, str) and v.startswith("np."):
                         np_value = eval(v)  # pylint: disable=eval-used
                         if expected_dtype != np_value.dtype:
                             logger.warning("dtype mismatch for input %s: expected=%s, actual=%s", k, expected_dtype,

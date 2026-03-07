@@ -5,10 +5,8 @@
 
 import numpy as np
 import tensorflow as tf
-
 from backend_test_base import Tf2OnnxBackendTestBase
 from common import *  # pylint: disable=wildcard-import, unused-wildcard-import
-
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test
 # pylint: disable=abstract-method,arguments-differ

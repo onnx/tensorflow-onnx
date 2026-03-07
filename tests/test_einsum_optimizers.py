@@ -4,17 +4,17 @@
 """Unit Tests for optimizers such as TransposeOptimizer."""
 
 from collections import OrderedDict
+
 import numpy as np
+from backend_test_base import Tf2OnnxBackendTestBase
+from common import check_opset_min_version, unittest_main
 from numpy.testing import assert_almost_equal
-from onnx import helper, TensorProto, OperatorSetIdProto
+from onnx import OperatorSetIdProto, TensorProto, helper
 from onnxruntime import InferenceSession
 
-from backend_test_base import Tf2OnnxBackendTestBase
-from common import unittest_main, check_opset_min_version
-from tf2onnx import utils, constants
+from tf2onnx import constants, utils
 from tf2onnx.graph import GraphUtil
 from tf2onnx.optimizer import EinsumOptimizer
-
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test
 

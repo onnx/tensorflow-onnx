@@ -1,9 +1,10 @@
 # SPDX-License-Identifier: Apache-2.0
 import os
+from collections import OrderedDict
+
 import numpy
 import numpy.random as rnd
-from collections import OrderedDict
-from _tools import generate_text_inputs, benchmark
+from _tools import benchmark, generate_text_inputs
 
 
 def main(opset=13):
@@ -20,7 +21,7 @@ def main(opset=13):
         ('input_mask', numpy.array([rnd.randint(0, 1) for i in range(0, 128)], dtype=numpy.int32).reshape((1, -1))),
         ('input_type_ids', numpy.array([i//5 for i in range(0, 128)], dtype=numpy.int32).reshape((1, -1)))
     ]) for i in range(0, 10)]
-   
+
     benchmark(url, dest, onnx_name, opset, inputs, output_name="pooled_output")
 
 

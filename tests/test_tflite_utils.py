@@ -4,12 +4,13 @@
 """Unit Tests for TFLite utils."""
 
 import os
-import tensorflow as tf
 
-from common import *  # pylint: disable=wildcard-import,unused-wildcard-import
+import tensorflow as tf
 from backend_test_base import Tf2OnnxBackendTestBase
+from common import *  # pylint: disable=wildcard-import,unused-wildcard-import
+
 from tf2onnx.tf_loader import from_function, tf_session
-from tf2onnx.tflite_utils import read_tflite_model, parse_tflite_graph
+from tf2onnx.tflite_utils import parse_tflite_graph, read_tflite_model
 
 # pylint: disable=missing-docstring
 

@@ -1,14 +1,14 @@
 # SPDX-License-Identifier: Apache-2.0
 
 
-import numpy as np
-import tensorflow as tf
-import onnx
 import os
+
+import numpy as np
+import onnx
+import tensorflow as tf
+
 from tf2onnx import utils
 from tf2onnx.handler import tf_op
-from tf2onnx.tf_loader import tf_placeholder
-
 
 DIR_PATH = os.path.realpath(os.path.dirname(__file__))
 saved_model_path = os.path.join(DIR_PATH, "model.onnx")
@@ -52,6 +52,7 @@ onnx.checker.check_model(onnx_model)
 
 ## Run the model in ONNXRuntime to verify the result.
 import onnxruntime as ort
+
 input = np.arange(6).reshape(2,3).astype(np.int32)
 ort_session = ort.InferenceSession(saved_model_path)
 ort_inputs = {ort_session.get_inputs()[0].name: input}

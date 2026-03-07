@@ -1,5 +1,4 @@
 # Adapted the sample code on https://tfhub.dev/tensorflow/albert_en_xlarge/3
-import tensorflow_text as text
 import tensorflow as tf
 import tensorflow_hub as hub
 
@@ -30,10 +29,13 @@ encoder_outputs = encoder(encoder_inputs)["pooled_output"]
 encoding_model = tf.keras.Model(encoder_inputs, encoder_outputs)
 
 
-import tf2onnx
-import onnxruntime as ort
-import zipfile
 import os
+import zipfile
+
+import onnxruntime as ort
+
+import tf2onnx
+
 print("Converting")
 
 dest = "tf-albert-en-xlarge"

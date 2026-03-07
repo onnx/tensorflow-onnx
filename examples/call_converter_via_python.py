@@ -5,6 +5,7 @@ A simple example how to call tensorflow-onnx via python.
 """
 
 import tensorflow as tf
+
 import tf2onnx
 
 with tf.Session() as sess:

@@ -3,14 +3,13 @@
 """ tf2onnx mapping functions for ms domain. """
 
 import numpy as np
-
 from onnx import onnx_pb
 from onnx.onnx_pb import TensorProto
+
 from tf2onnx import constants, utils
 from tf2onnx.handler import tf_op
 from tf2onnx.onnx_opset import controlflow
 from tf2onnx.onnx_opset.nn import conv_convert_inputs, conv_dims_attr
-
 
 # pylint: disable=unused-argument,missing-docstring
 

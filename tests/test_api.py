@@ -10,12 +10,12 @@ import zipfile
 
 import numpy as np
 import tensorflow as tf
+from backend_test_base import Tf2OnnxBackendTestBase
+from common import check_opset_min_version, check_tf_min_version, requires_custom_ops, skip_tf_versions, unittest_main
 from onnx import helper
 
-from common import check_tf_min_version, unittest_main, requires_custom_ops, check_opset_min_version, skip_tf_versions
-from tf2onnx.tf_loader import is_tf2
-from backend_test_base import Tf2OnnxBackendTestBase
 import tf2onnx
+from tf2onnx.tf_loader import is_tf2
 
 
 class ApiTests(Tf2OnnxBackendTestBase):

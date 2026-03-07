@@ -9,13 +9,13 @@ import logging
 import sys
 import traceback
 
-from onnx import TensorProto
 import numpy as np
+from onnx import TensorProto
 
-from tf2onnx.rewriter.loop_rewriter_base import LoopRewriterBase, Context
-from tf2onnx.rewriter.rnn_utils import REWRITER_RESULT
 from tf2onnx import utils
 from tf2onnx.graph_builder import GraphBuilder
+from tf2onnx.rewriter.loop_rewriter_base import Context, LoopRewriterBase
+from tf2onnx.rewriter.rnn_utils import REWRITER_RESULT
 
 logger = logging.getLogger(__name__)
 

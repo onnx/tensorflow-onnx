@@ -6,9 +6,9 @@ tf2onnx.rewriter - rewrite tensorflow subgraph to onnx dropout op
 """
 
 import numpy as np
-from tf2onnx import utils
-from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
-from tf2onnx import logging
+
+from tf2onnx import logging, utils
+from tf2onnx.graph_matcher import GraphMatcher, OpTypePattern
 
 logger = logging.getLogger(__name__)
 

@@ -2,22 +2,22 @@
 
 """tf2onnx.optimizer module"""
 
-from collections import OrderedDict
 import copy
+from collections import OrderedDict
 
+from .. import logging
+from .back_to_back_optimizer import BackToBackOptimizer
+from .const_dequantize_optimizer import ConstDequantizeOptimizer
 from .const_fold_optimizer import ConstFoldOptimizer
 from .einsum_optimizer import EinsumOptimizer
-from .identity_optimizer import IdentityOptimizer
-from .merge_duplicated_nodes_optimizer import MergeDuplicatedNodesOptimizer
-from .transpose_optimizer import TransposeOptimizer
-from .loop_optimizer import LoopOptimizer
-from .back_to_back_optimizer import BackToBackOptimizer
-from .upsample_optimizer import UpsampleOptimizer
-from .const_dequantize_optimizer import ConstDequantizeOptimizer
-from .reshape_optimizer import ReshapeOptimizer
 from .global_pool_optimizer import GlobalPoolOptimizer
+from .identity_optimizer import IdentityOptimizer
+from .loop_optimizer import LoopOptimizer
+from .merge_duplicated_nodes_optimizer import MergeDuplicatedNodesOptimizer
 from .q_dq_optimizer import QDQOptimizer
-from .. import logging
+from .reshape_optimizer import ReshapeOptimizer
+from .transpose_optimizer import TransposeOptimizer
+from .upsample_optimizer import UpsampleOptimizer
 
 # optimizer sequence need to be considered carefully
 _optimizers = OrderedDict([

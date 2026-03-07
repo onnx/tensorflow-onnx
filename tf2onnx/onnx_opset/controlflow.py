@@ -9,14 +9,13 @@ import copy
 import logging
 
 import numpy as np
-
 from onnx import onnx_pb
 from onnx.onnx_pb import TensorProto
+
 from tf2onnx import utils
+from tf2onnx.graph_builder import GraphBuilder
 from tf2onnx.handler import tf_op
 from tf2onnx.tf_loader import find_function
-from tf2onnx.graph_builder import GraphBuilder
-
 
 logger = logging.getLogger(__name__)
 

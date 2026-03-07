@@ -1,12 +1,13 @@
 # SPDX-License-Identifier: Apache-2.0
 import os
+
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 import pickle
+
 import numpy
-from onnxruntime import InferenceSession
-from _tools import generate_random_images, benchmark, measure_time
 import tensorflow as tf
 import tensorflow_hub as hub
+from _tools import benchmark, generate_random_images, measure_time
 
 
 def main(opset=13):

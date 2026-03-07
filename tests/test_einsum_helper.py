@@ -3,15 +3,16 @@
 
 """Unit Tests for einsum decomposition."""
 
-import unittest
 import itertools
+import unittest
+
 import numpy as np
-from numpy.testing import assert_almost_equal
-from onnxruntime import InferenceSession
-from tf2onnx.optimizer.einsum_optimizer import (
-    analyse_einsum_equation, decompose_einsum_equation, EinsumSubOp)
 from backend_test_base import Tf2OnnxBackendTestBase
 from common import check_opset_min_version
+from numpy.testing import assert_almost_equal
+from onnxruntime import InferenceSession
+
+from tf2onnx.optimizer.einsum_optimizer import EinsumSubOp, analyse_einsum_equation, decompose_einsum_equation
 
 
 class TestEinsum(Tf2OnnxBackendTestBase):

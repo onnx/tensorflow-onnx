@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0
 import os
-import numpy
-from _tools import generate_random_images, benchmark
+
+from _tools import benchmark, generate_random_images
+
 import tf2onnx
-import onnxruntime as ort
 
 
 def main(opset=13):

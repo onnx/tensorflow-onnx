@@ -10,18 +10,44 @@ python -m tf2onnx.convert : api and commandline tool to convert a tensorflow mod
 import argparse
 import os
 import sys
+
 from packaging.version import Version
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = "3"
 
 import tensorflow as tf
 
-from tf2onnx.tfonnx import process_tf_graph
-from tf2onnx import constants, logging, utils, optimizer
-from tf2onnx import tf_loader
+from tf2onnx import constants, logging, optimizer, tf_loader, utils
 from tf2onnx.graph import ExternalTensorStorage
 from tf2onnx.tf_utils import compress_graph_def, get_tf_version
+from tf2onnx.tfonnx import process_tf_graph
 
+
+def _get_input_names(model):
+    """Get input names from a Keras model, compatible with old and new Keras."""
+    if hasattr(model, 'input_names'):
+        return model.input_names
+    try:
+        return [inp.name.split('/')[0] for inp in model.inputs]
+    except (AttributeError, IndexError):
+        return None
+
+
+def _get_output_names(model):
+    """Get output names from a Keras model, compatible with old and new Keras."""
+    if hasattr(model, 'output_names'):
+        return model.output_names
+    # Keras in TF 2.12+ removed output_names; derive from output layers
+    try:
+        return [output.name.split('/')[0] for output in model.outputs]
+    except (AttributeError, IndexError):
+        return None
+
+
+def _set_output_names(model, names):
+    """Set output names on a Keras model if supported."""
+    if hasattr(model, 'output_names'):
+        model.output_names = names
 
 
 # pylint: disable=unused-argument
@@ -212,7 +238,7 @@ def main():
 
     if any(opset.domain == constants.CONTRIB_OPS_DOMAIN for opset in extra_opset):
         try:
-            import tensorflow_text   # pylint: disable=import-outside-toplevel
+            import tensorflow_text  # pylint: disable=import-outside-toplevel
         except ModuleNotFoundError:
             logger.warning("tensorflow_text not installed. Model will fail to load if tensorflow_text ops are used.")
 
@@ -325,16 +351,17 @@ def _rename_duplicate_keras_model_names(model):
     """
     In very rare cases, keras has a bug where it will give multiple outputs the same name.
     We must edit the model or the TF trace will fail. Returns old_out_names (or None if no edit was made).
-    IMPORTANT: model may be edited. Assign model.output_names to old_out_names to restore.
+    IMPORTANT: model may be edited via _set_output_names to restore.
     """
     old_out_names = None
-    if model.output_names and len(set(model.output_names)) != len(model.output_names):
+    out_names = _get_output_names(model)
+    if out_names and len(set(out_names)) != len(out_names):
         # In very rare cases, keras has a bug where it will give multiple outputs the same name
         # We must edit the model or the TF trace will fail
-        old_out_names = model.output_names
+        old_out_names = out_names
         used_names = set()
         new_out_names = []
-        for name in model.output_names:
+        for name in out_names:
             new_name = name
             i = 0
             while new_name in used_names:
@@ -342,7 +369,7 @@ def _rename_duplicate_keras_model_names(model):
                 new_name = name + "_" + str(i)
             used_names.add(new_name)
             new_out_names.append(new_name)
-        model.output_names = new_out_names
+        _set_output_names(model, new_out_names)
     return old_out_names
 
 
@@ -370,10 +397,12 @@ def _from_keras_tf1(model, opset=None, custom_ops=None, custom_op_handlers=None,
     input_names = [t.name for t in model.inputs]
     output_names = [t.name for t in model.outputs]
     old_out_names = _rename_duplicate_keras_model_names(model)
-    tensors_to_rename = dict(zip(input_names, model.input_names))
-    tensors_to_rename.update(zip(output_names, model.output_names))
+    model_input_names = _get_input_names(model) or [t.name.split('/')[0] for t in model.inputs]
+    model_output_names = _get_output_names(model) or [t.name.split('/')[0] for t in model.outputs]
+    tensors_to_rename = dict(zip(input_names, model_input_names))
+    tensors_to_rename.update(zip(output_names, model_output_names))
     if old_out_names is not None:
-        model.output_names = old_out_names
+        _set_output_names(model, old_out_names)
 
     if _is_legacy_keras_model(model):
         import keras  # pylint: disable=import-outside-toplevel
@@ -409,6 +438,42 @@ def _from_keras_tf1(model, opset=None, custom_ops=None, custom_op_handlers=None,
         return model_proto, external_tensor_storage
 
 
+def _get_concrete_function(model, input_signature):
+    """Get a concrete function from a Keras model, with fallbacks for different TF versions."""
+    # Try trace_model_call first (works for TF < 2.16)
+    try:
+        from tensorflow.python.keras.saving import (
+            saving_utils as _saving_utils,  # pylint: disable=import-outside-toplevel
+        )
+        function = _saving_utils.trace_model_call(model, input_signature)
+        try:
+            return function.get_concrete_function()
+        except TypeError as e:
+            # Legacy keras models don't accept the training arg tf provides so we hack around it
+            if "got an unexpected keyword argument 'training'" not in str(e):
+                raise e
+            model_call = model.call
+            def wrap_call(*args, training=False, **kwargs):
+                return model_call(*args, **kwargs)
+            model.call = wrap_call
+            function = _saving_utils.trace_model_call(model, input_signature)
+            try:
+                return function.get_concrete_function()
+            finally:
+                model.call = model_call
+    except (ImportError, AttributeError):
+        # TF 2.16+ removed trace_model_call / _get_save_spec; fall back to tf.function
+        pass
+
+    # Fallback: derive input signature from the model and use tf.function
+    if input_signature is None:
+        input_signature = [tf.TensorSpec(shape=inp.shape, dtype=inp.dtype) for inp in model.inputs]
+    @tf.function(input_signature=input_signature)
+    def model_fn(*args):
+        return model(*args, training=False)
+    return model_fn.get_concrete_function()
+
+
 def from_keras(model, input_signature=None, opset=None, custom_ops=None, custom_op_handlers=None,
                custom_rewriter=None, inputs_as_nchw=None, outputs_as_nchw=None, extra_opset=None, shape_override=None,
                target=None, large_model=False, output_path=None, optimizers=None):
@@ -440,36 +505,8 @@ def from_keras(model, input_signature=None, opset=None, custom_ops=None, custom_
                                outputs_as_nchw, extra_opset, shape_override, target, large_model, output_path)
 
     old_out_names = _rename_duplicate_keras_model_names(model)
-    from tensorflow.python.keras.saving import saving_utils as _saving_utils # pylint: disable=import-outside-toplevel
 
-    # let tensorflow do the checking if model is a valid model
-    function = _saving_utils.trace_model_call(model, input_signature)
-    try:
-        concrete_func = function.get_concrete_function()
-    except TypeError as e:
-        # Legacy keras models don't accept the training arg tf provides so we hack around it
-        if "got an unexpected keyword argument 'training'" not in str(e):
-            raise e
-        model_call = model.call
-        def wrap_call(*args, training=False, **kwargs):
-            return model_call(*args, **kwargs)
-        model.call = wrap_call
-        function = _saving_utils.trace_model_call(model, input_signature)
-        try:
-            # Legacy keras get make TF erroneously enter eager mode when it should be making symbolic tensors
-            import tensorflow_core  # pylint: disable=import-outside-toplevel
-            old_get_learning_phase = tensorflow_core.python.keras.backend.learning_phase
-            tensorflow_core.python.keras.backend.learning_phase = \
-                tensorflow_core.python.keras.backend.symbolic_learning_phase
-        except ImportError:
-            old_get_learning_phase = None
-        try:
-            concrete_func = function.get_concrete_function()
-        finally:
-            # Put everything back
-            model.call = model_call
-            if old_get_learning_phase is not None:
-                tensorflow_core.python.keras.backend.learning_phase = old_get_learning_phase
+    concrete_func = _get_concrete_function(model, input_signature)
 
     # These inputs will be removed during freezing (includes resources, etc.)
     if hasattr(concrete_func.graph, '_captures'):
@@ -486,15 +523,16 @@ def from_keras(model, input_signature=None, opset=None, custom_ops=None, custom_
     tensors_to_rename = tensor_names_from_structed(concrete_func, input_names, output_names)
     reverse_lookup = {v: k for k, v in tensors_to_rename.items()}
 
-    if model.output_names:
-        # model.output_names is an optional field of Keras models indicating output order. It is None if unused.
-        output_names = [reverse_lookup[out] for out in model.output_names]
+    model_out_names = _get_output_names(model)
+    if model_out_names:
+        # model output_names is an optional field of Keras models indicating output order.
+        output_names = [reverse_lookup[out] for out in model_out_names]
     elif isinstance(concrete_func.structured_outputs, dict):
         # Other models specify output order using the key order of structured_outputs
         output_names = [reverse_lookup[out] for out in concrete_func.structured_outputs.keys()]
 
     if old_out_names is not None:
-        model.output_names = old_out_names
+        _set_output_names(model, old_out_names)
 
     with tf.device("/cpu:0"):
         frozen_graph, initialized_tables = \

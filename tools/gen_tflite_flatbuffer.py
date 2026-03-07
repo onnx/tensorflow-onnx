@@ -10,6 +10,7 @@ This script only tested on Windows
 import os
 import subprocess
 import tempfile
+
 import wget
 
 SCHEMA_URL = "https://github.com/tensorflow/tensorflow/raw/master/tensorflow/lite/schema/schema.fbs"

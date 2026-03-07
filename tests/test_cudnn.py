@@ -5,10 +5,9 @@
 
 import numpy as np
 import tensorflow as tf
-
-from tensorflow.python.ops import init_ops
 from backend_test_base import Tf2OnnxBackendTestBase
-from common import check_tf_max_version, skip_tf_cpu, check_opset_min_version, unittest_main
+from common import check_opset_min_version, check_tf_max_version, skip_tf_cpu, unittest_main
+from tensorflow.python.ops import init_ops
 
 
 class CudnnTests(Tf2OnnxBackendTestBase):

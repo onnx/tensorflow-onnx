@@ -3,16 +3,14 @@
 # From https://github.com/tdeboissiere/DeepLearningImplementations/blob/master/DenseNet/densenet.py
 # Modifications Copyright (c) Microsoft.
 
-from mock_keras2onnx.proto import keras
-from keras.models import Model
-from keras.layers.core import Dense, Dropout, Activation
-from keras.layers.convolutional import Conv2D
-from keras.layers.pooling import AveragePooling2D
-from keras.layers.pooling import GlobalAveragePooling2D
-from keras.layers import Input, Concatenate
-from keras.layers.normalization import BatchNormalization
-from keras.regularizers import l2
 import keras.backend as K
+from keras.layers import Concatenate, Input
+from keras.layers.convolutional import Conv2D
+from keras.layers.core import Activation, Dense, Dropout
+from keras.layers.normalization import BatchNormalization
+from keras.layers.pooling import AveragePooling2D, GlobalAveragePooling2D
+from keras.models import Model
+from keras.regularizers import l2
 
 
 def conv_factory(x, concat_axis, nb_filter,

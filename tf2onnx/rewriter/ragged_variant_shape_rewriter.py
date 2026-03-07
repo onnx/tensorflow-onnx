@@ -6,9 +6,9 @@ tf2onnx.rewriter - RaggedTensorToVariant -> Shape pattern
 """
 
 import numpy as np
-from tf2onnx import utils
-from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
 
+from tf2onnx import utils
+from tf2onnx.graph_matcher import GraphMatcher, OpTypePattern
 
 # pylint: disable=missing-docstring
 
