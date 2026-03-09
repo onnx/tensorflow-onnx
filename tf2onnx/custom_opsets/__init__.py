@@ -2,6 +2,4 @@
 
 """ custom tf2onnx mapping functions. """
 
-from . import ms
-from . import onnx_ml
-from . import string_ops
+from . import ms, onnx_ml, string_ops

@@ -6,7 +6,8 @@
 import os
 import subprocess
 import unittest
-from common import check_opset_min_version, check_opset_max_version, check_tf_min_version
+
+from common import check_opset_max_version, check_opset_min_version, check_tf_min_version
 
 
 class TestExample(unittest.TestCase):

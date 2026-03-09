@@ -4,11 +4,9 @@
 """Unit Tests for Benchmarks."""
 import os
 import subprocess
+
 from backend_test_base import Tf2OnnxBackendTestBase
-from common import (
-    check_opset_min_version, check_tf_min_version,
-    unittest_main, check_onnxruntime_min_version
-)
+from common import check_onnxruntime_min_version, check_opset_min_version, check_tf_min_version, unittest_main
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test,cell-var-from-loop
 # pylint: disable=invalid-name

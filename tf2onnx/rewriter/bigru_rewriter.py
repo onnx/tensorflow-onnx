@@ -7,10 +7,11 @@ This rewriter depends on tf2onnx.rewriter.gru_rewriter's results.
 """
 
 import logging
+
 import numpy as np
+
 from tf2onnx import utils
 from tf2onnx.rewriter import rnn_utils
-
 
 logger = logging.getLogger(__name__)
 

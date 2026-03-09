@@ -5,8 +5,8 @@
    if a dequantize op's inputs are const we may be able to fold it through the next op
 """
 
-from .optimizer_base import GraphOptimizerBase
 from .const_fold_optimizer import ConstFoldOptimizer
+from .optimizer_base import GraphOptimizerBase
 
 # pylint: disable=logging-not-lazy,unused-argument,missing-docstring
 

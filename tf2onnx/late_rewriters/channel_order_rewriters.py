@@ -5,7 +5,7 @@
 tf2onnx.late_rewriters.channel_order_rewriters - contains rewriters for replacing ops with channel first/last versions
 """
 
-from tf2onnx import utils, constants
+from tf2onnx import constants, utils
 
 # pylint: disable=invalid-name,unused-argument,missing-docstring, unused-variable
 

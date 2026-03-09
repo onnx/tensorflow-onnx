@@ -5,15 +5,19 @@
 
 import numpy as np
 import tensorflow as tf
-
-from tensorflow.python.ops import init_ops
-from tensorflow.python.ops import variable_scope
 from backend_test_base import Tf2OnnxBackendTestBase
-from common import check_tf_min_version, unittest_main, check_opset_after_tf_version, \
-    skip_tf2, skip_tf_versions, check_op_count, skip_tfjs
+from common import (
+    check_op_count,
+    check_opset_after_tf_version,
+    check_tf_min_version,
+    skip_tf2,
+    skip_tf_versions,
+    skip_tfjs,
+    unittest_main,
+)
+from tensorflow.python.ops import init_ops, variable_scope
 
 from tf2onnx.tf_loader import is_tf2
-
 
 # pylint: disable=missing-docstring,invalid-name,unused-argument,using-constant-test,cell-var-from-loop
 # pylint: disable=invalid-name

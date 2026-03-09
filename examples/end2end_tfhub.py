@@ -7,15 +7,17 @@ the predictions from tensorflow to check there is no
 discrepencies. Inferencing time is also compared between
 *onnxruntime*, *tensorflow* and *tensorflow.lite*.
 """
-from onnxruntime import InferenceSession
 import os
-import sys
 import subprocess
+import sys
 import timeit
+
 import numpy as np
 import tensorflow as tf
+from onnxruntime import InferenceSession
 from tensorflow import keras
 from tensorflow.keras import Input
+
 try:
     import tensorflow_hub as tfhub
 except ImportError:

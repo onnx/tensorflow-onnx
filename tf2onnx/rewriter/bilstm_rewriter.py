@@ -7,7 +7,9 @@ This rewriter depends on tf2onnx.rewriter.lstm_rewriter's results.
 """
 
 import logging
+
 import numpy as np
+
 from tf2onnx import utils
 from tf2onnx.rewriter import rnn_utils
 

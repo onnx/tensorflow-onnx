@@ -15,5 +15,5 @@ from . import (
     rnn,
     signal,
     tensor,
-    traditionalml
+    traditionalml,
 )

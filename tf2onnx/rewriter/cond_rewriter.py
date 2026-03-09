@@ -9,8 +9,8 @@ import logging
 import traceback
 from collections import OrderedDict
 from enum import Enum
-from tf2onnx import utils
 
+from tf2onnx import utils
 
 logger = logging.getLogger(__name__)
 

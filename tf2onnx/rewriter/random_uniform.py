@@ -5,10 +5,10 @@
 tf2onnx.rewriter - rewrite tensorflow subgraph to onnx random_uniform op
 """
 import numpy as np
-from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
-from tf2onnx.graph_builder import GraphBuilder
-from tf2onnx import utils, handler
 
+from tf2onnx import handler, utils
+from tf2onnx.graph_builder import GraphBuilder
+from tf2onnx.graph_matcher import GraphMatcher, OpTypePattern
 
 # pylint: disable=missing-docstring
 

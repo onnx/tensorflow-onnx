@@ -7,18 +7,15 @@ from collections import namedtuple
 
 import graphviz as gv
 import numpy as np
-from onnx import TensorProto
-from onnx import helper, numpy_helper
-
 import tensorflow as tf
-from tf2onnx import utils, tf_utils
-from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
-from tf2onnx.graph import GraphUtil
-from tf2onnx.tf_loader import tf_reset_default_graph, tf_session
-
 from backend_test_base import Tf2OnnxBackendTestBase
 from common import unittest_main
+from onnx import TensorProto, helper, numpy_helper
 
+from tf2onnx import tf_utils, utils
+from tf2onnx.graph import GraphUtil
+from tf2onnx.graph_matcher import GraphMatcher, OpTypePattern
+from tf2onnx.tf_loader import tf_reset_default_graph, tf_session
 
 # pylint: disable=missing-docstring
 

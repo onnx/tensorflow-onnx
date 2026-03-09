@@ -6,8 +6,8 @@ tf2onnx.graph_helper - class to help building graph, such as helping to make com
 """
 
 import numpy as np
-from tf2onnx import utils, logging
 
+from tf2onnx import logging, utils
 
 # pylint: disable=missing-docstring
 

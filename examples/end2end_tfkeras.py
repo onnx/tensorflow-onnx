@@ -7,14 +7,13 @@ the predictions from tensorflow to check there is no
 discrepencies. Inferencing time is also compared between
 *onnxruntime*, *tensorflow* and *tensorflow.lite*.
 """
-from onnxruntime import InferenceSession
-import os
 import subprocess
 import timeit
+
 import numpy as np
-import tensorflow as tf
+from onnxruntime import InferenceSession
 from tensorflow import keras
-from tensorflow.keras import layers, Input
+from tensorflow.keras import Input, layers
 
 ########################################
 # Creates the model.

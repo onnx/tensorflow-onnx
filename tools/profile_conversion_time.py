@@ -4,14 +4,17 @@
 """
 Profiles the conversion of a Keras model.
 """
-import sys
-import cProfile
-from pstats import SortKey, Stats
-import io
 import argparse
+import cProfile
+import io
+import sys
+from pstats import SortKey, Stats
+
 import tensorflow as tf
-from tensorflow.keras.applications import MobileNet, EfficientNetB2
+from tensorflow.keras.applications import EfficientNetB2, MobileNet
+
 from tf2onnx import tfonnx
+
 try:
     from pyinstrument import Profiler
 except ImportError:

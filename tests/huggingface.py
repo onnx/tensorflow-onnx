@@ -22,6 +22,7 @@ os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 import numpy as np
 import onnxruntime as rt
 import tensorflow as tf
+
 import tf2onnx
 
 compare_perf = True
@@ -494,7 +495,7 @@ class TestTransformers(unittest.TestCase):
     # XLNET
 
     def _test_TFXLNET(self, size, large=False):
-        from transformers import XLNetTokenizer, TFXLNetModel
+        from transformers import TFXLNetModel, XLNetTokenizer
         tokenizer = XLNetTokenizer.from_pretrained(size)
         model = TFXLNetModel.from_pretrained(size)
         input_dict = tokenizer("Hello, my dog is cute", return_tensors="tf")

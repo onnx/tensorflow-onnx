@@ -5,12 +5,12 @@
 tf2onnx.rewriter.gru_tf2_rewriter - Rewrites GRU pattern used by tf2.
 """
 
-from tf2onnx.graph_matcher import GraphMatcher
-from tf2onnx.rewriter.rnn_utils import make_grucell_pattern, keras_gru_pattern
-from tf2onnx.tf_loader import find_function
-from tf2onnx.rewriter.unit_rnn_rewriter_base import UnitRnnContext
-from tf2onnx.rewriter.gru_rewriter import GRUUnitRewriter
 from tf2onnx.graph_builder import GraphBuilder
+from tf2onnx.graph_matcher import GraphMatcher
+from tf2onnx.rewriter.gru_rewriter import GRUUnitRewriter
+from tf2onnx.rewriter.rnn_utils import keras_gru_pattern, make_grucell_pattern
+from tf2onnx.rewriter.unit_rnn_rewriter_base import UnitRnnContext
+from tf2onnx.tf_loader import find_function
 
 # pylint: disable=invalid-name,unused-argument,missing-docstring, unused-variable
 

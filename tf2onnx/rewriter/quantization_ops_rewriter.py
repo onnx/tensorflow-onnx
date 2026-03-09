@@ -7,9 +7,10 @@ tf2onnx.rewriter - rewrite tensorflow QuantizeAndDequantizeV2|QuantizeAndDequant
 
 import numpy as np
 from onnx import TensorProto, helper
-from tf2onnx.graph_builder import GraphBuilder
-from tf2onnx.graph_matcher import OpTypePattern, GraphMatcher
+
 from tf2onnx import utils
+from tf2onnx.graph_builder import GraphBuilder
+from tf2onnx.graph_matcher import GraphMatcher, OpTypePattern
 
 # pylint: disable=missing-docstring
 

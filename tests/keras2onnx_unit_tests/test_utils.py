@@ -1,19 +1,20 @@
 # SPDX-License-Identifier: Apache-2.0
 
+import json
 import os
 import sys
-import onnx
-from onnx import helper
-import numpy as np
-import mock_keras2onnx
-from mock_keras2onnx.proto import keras, is_keras_older_than
-from mock_keras2onnx.proto.tfcompat import is_tf2
-from packaging.version import Version
-from tf2onnx.keras2onnx_api import convert_keras, get_maximum_opset_supported
 import time
-import json
 import urllib
 
+import mock_keras2onnx
+import numpy as np
+import onnx
+from mock_keras2onnx.proto import is_keras_older_than, keras
+from mock_keras2onnx.proto.tfcompat import is_tf2
+from onnx import helper
+from packaging.version import Version
+
+from tf2onnx.keras2onnx_api import convert_keras, get_maximum_opset_supported
 
 # Mapping opset to ONNXRuntime version.
 ORT_OPSET_VERSION = {
@@ -21,6 +22,13 @@ ORT_OPSET_VERSION = {
     "1.12.0": 17, "1.13.0": 17, "1.14.0": 18, "1.15.0": 18, "1.16.0": 18, "1.17.0": 18,
     "1.18.0": 18, "1.19.0": 18, "1.20.0": 18,
 }
+
+def get_input_names(model):
+    """Get input names from a Keras model, compatible with TF 2.12+ where input_names was removed."""
+    if hasattr(model, 'input_names'):
+        return model.input_names
+    return [inp.name.split('/')[0] for inp in model.inputs]
+
 
 working_path = os.path.abspath(os.path.dirname(__file__))
 tmp_path = os.path.join(working_path, 'temp')
@@ -158,7 +166,7 @@ def parse_profile_results(sess_time, kernel_time_only=False, threshold=0):
     if (threshold > 0):
         results.append(f"Threshold of Percentage > {threshold:.2f}%")
 
-    results.append(f"Duration\tPercentage\tProvider\tName")
+    results.append("Duration\tPercentage\tProvider\tName")
     for k, v in sorted(node_time.items(), key=lambda x: x[1], reverse=True):
         provider = node_provider[k] if k in node_provider else ""
         ratio = v / total

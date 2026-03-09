@@ -7,10 +7,11 @@ from collections import defaultdict
 
 import numpy as np
 import onnx
-from tf2onnx.constants import NCHW_TO_NHWC, NHWC_TO_NCHW, NCDHW_TO_NDHWC, NDHWC_TO_NCDHW, TARGET_CHANNELS_LAST
+
+from tf2onnx.constants import NCDHW_TO_NDHWC, NCHW_TO_NHWC, NDHWC_TO_NCDHW, NHWC_TO_NCHW, TARGET_CHANNELS_LAST
+
 from .. import utils
 from .optimizer_base import GraphOptimizerBase
-
 
 # pylint: disable=logging-not-lazy,unused-argument,missing-docstring,abstract-method
 # FIXME:

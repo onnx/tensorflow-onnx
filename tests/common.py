@@ -9,13 +9,16 @@ import sys
 import unittest
 from collections import defaultdict
 
-from packaging.version import Version
-from parameterized import parameterized
-import timeout_decorator
 import numpy as np
 import tensorflow as tf
+try:
+    import timeout_decorator
+except ImportError:
+    timeout_decorator = None
+from packaging.version import Version
+from parameterized import parameterized
 
-from tf2onnx import constants, logging, utils, tf_utils, tf_loader
+from tf2onnx import constants, logging, tf_loader, tf_utils, utils
 
 # pylint: disable=import-outside-toplevel
 __all__ = [
@@ -510,6 +513,6 @@ def timeout(seconds):
     NOTE: Please only use for ensuring that a test does not time out.
     Do not write tests that intentionally time out.
     """
-    if get_test_config().is_windows:
+    if get_test_config().is_windows or timeout_decorator is None:
         return unittest.skip("timeout testing is unreliable on Windows.")
     return timeout_decorator.timeout(seconds)

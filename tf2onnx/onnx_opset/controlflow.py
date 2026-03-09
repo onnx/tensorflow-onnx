@@ -9,14 +9,13 @@ import copy
 import logging
 
 import numpy as np
-
 from onnx import onnx_pb
 from onnx.onnx_pb import TensorProto
+
 from tf2onnx import utils
+from tf2onnx.graph_builder import GraphBuilder
 from tf2onnx.handler import tf_op
 from tf2onnx.tf_loader import find_function
-from tf2onnx.graph_builder import GraphBuilder
-
 
 logger = logging.getLogger(__name__)
 
@@ -195,7 +194,8 @@ class Select:
         handles_nan = node.get_attr_value("handles_nan", False)
         if ctx.get_dtype(node.output[0]) in [TensorProto.FLOAT, TensorProto.DOUBLE]:
             cond_node = node.inputs[0]
-            if cond_node.type == "IsNaN":
+            if cond_node.type in {"IsNaN", "IsInf"}:
+                # We can't use the mul trick if Inf is involved since Inf * 0 = NaN as per IEEE 754.
                 handles_nan = True
             if cond_node.type == "NotEqual" and cond_node.input[0] == cond_node.input[1]:
                 handles_nan = True

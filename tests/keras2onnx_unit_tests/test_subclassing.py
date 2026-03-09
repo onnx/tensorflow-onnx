@@ -1,11 +1,11 @@
 # SPDX-License-Identifier: Apache-2.0
 
-import pytest
 import mock_keras2onnx
 import numpy as np
+import pytest
 import tensorflow as tf
-from test_utils import convert_keras_for_test as convert_keras
 from mock_keras2onnx.proto import is_tensorflow_older_than
+from test_utils import convert_keras_for_test as convert_keras
 
 if (not mock_keras2onnx.proto.is_tf_keras) or (not mock_keras2onnx.proto.tfcompat.is_tf2):
     pytest.skip("Tensorflow 2.0 only tests.", allow_module_level=True)

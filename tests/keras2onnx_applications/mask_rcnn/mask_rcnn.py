@@ -2,22 +2,21 @@
 
 import os
 import sys
-import numpy as np
-import skimage
-import onnx
+from os.path import abspath, dirname
+
 import mock_keras2onnx
-
-from mrcnn.config import Config
-from mrcnn.model import BatchNorm, DetectionLayer
-from mrcnn import model as modellib
-from mrcnn import visualize
-
+import numpy as np
+import onnx
+import skimage
 from mock_keras2onnx import set_converter
 from mock_keras2onnx.ke2onnx.batch_norm import convert_keras_batch_normalization
-from os.path import dirname, abspath
+from mrcnn import model as modellib
+from mrcnn import visualize
+from mrcnn.config import Config
+from mrcnn.model import BatchNorm, DetectionLayer
+
 sys.path.insert(0, os.path.join(dirname(abspath(__file__)), '../../keras2onnx_tests/'))
 from test_utils import convert_tf_crop_and_resize
-
 
 ROOT_DIR = os.path.abspath("./")
 

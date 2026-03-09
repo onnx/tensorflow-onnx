@@ -13,20 +13,20 @@ import numpy as np
 from onnx import onnx_pb
 
 import tf2onnx
+import tf2onnx.custom_opsets  # pylint: disable=unused-import
 import tf2onnx.onnx_opset  # pylint: disable=unused-import
 import tf2onnx.tflite_handlers  # pylint: disable=unused-import
-import tf2onnx.custom_opsets  # pylint: disable=unused-import
 from tf2onnx.graph import Graph
-from tf2onnx.rewriter import *  # pylint: disable=wildcard-import
-from tf2onnx.tflite_rewriters import *  # pylint: disable=wildcard-import
 from tf2onnx.late_rewriters import rewrite_channels_last
+from tf2onnx.rewriter import *  # pylint: disable=wildcard-import
 from tf2onnx.shape_inference import infer_shape
-from tf2onnx.tf_loader import is_function, resolve_functions, set_function, clear_functions
-from tf2onnx.tf_utils import tensorflow_to_onnx, get_tf_version, compute_const_folding_using_tf
-from tf2onnx.tflite_utils import graphs_from_tflite
+from tf2onnx.tf_loader import clear_functions, is_function, resolve_functions, set_function
+from tf2onnx.tf_utils import compute_const_folding_using_tf, get_tf_version, tensorflow_to_onnx
 from tf2onnx.tfjs_utils import graphs_from_tfjs
+from tf2onnx.tflite_rewriters import *  # pylint: disable=wildcard-import
+from tf2onnx.tflite_utils import graphs_from_tflite
 
-from . import constants, logging, schemas, utils, handler
+from . import constants, handler, logging, schemas, utils
 
 logger = logging.getLogger(__name__)
 

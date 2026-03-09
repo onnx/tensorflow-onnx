@@ -5,18 +5,102 @@
 
 import logging
 import uuid
-from packaging.version import Version
 
 import tensorflow as tf
 from google.protobuf.message import DecodeError
-from tensorflow.core.framework import tensor_pb2
-from tensorflow.core.protobuf import saved_model_pb2
-from tensorflow.python.ops import lookup_ops
-from tensorflow.python.util import compat
+from packaging.version import Version
+try:
+    from tensorflow.core.framework import tensor_pb2
+except ImportError:
+    # On some TF Windows builds (tensorflow-intel) proto submodules are not importable
+    # during module load because TF's lazy loader hasn't finished initialising yet.
+    # Use a proxy that defers the TF call until first attribute access (at test runtime).
+    class _LazyMod:
+        """Resolves attributes via factory functions on first access."""
+        def __init__(self, **factories):
+            object.__setattr__(self, '_fns', factories)
+            object.__setattr__(self, '_cache', {})
+        def __getattr__(self, name):
+            cache = object.__getattribute__(self, '_cache')
+            if name not in cache:
+                cache[name] = object.__getattribute__(self, '_fns')[name]()
+            return cache[name]
+
+    def _resolve_TensorProto():
+        def _d():
+            return tf.constant(0, dtype=tf.int32)
+        g = tf.function(_d).get_concrete_function().graph.as_graph_def()
+        c = next(n for n in g.node if n.op == 'Const' and 'value' in n.attr)
+        return type(c.attr['value'].tensor)
+
+    tensor_pb2 = _LazyMod(TensorProto=_resolve_TensorProto)
+
+try:
+    from tensorflow.core.protobuf import saved_model_pb2
+except ImportError:
+    if "_LazyMod" not in dir():
+        class _LazyMod:
+            """Resolves attributes via factory functions on first access."""
+            def __init__(self, **factories):
+                object.__setattr__(self, '_fns', factories)
+                object.__setattr__(self, '_cache', {})
+            def __getattr__(self, name):
+                cache = object.__getattribute__(self, '_cache')
+                if name not in cache:
+                    cache[name] = object.__getattribute__(self, '_fns')[name]()
+                return cache[name]
+
+    def _resolve_SavedModel():
+        from tensorflow.core.protobuf import saved_model_pb2 as _sm  # noqa: PLC0415
+        return _sm.SavedModel
+
+    saved_model_pb2 = _LazyMod(SavedModel=_resolve_SavedModel)
+
+try:
+    from tensorflow.python.ops import lookup_ops
+except ImportError:
+    import importlib as _il
+
+    def _resolve_hash_table_v2():
+        return _il.import_module("tensorflow.python.ops.lookup_ops").hash_table_v2
+
+    def _resolve_lookup_table_export_v2():
+        return _il.import_module("tensorflow.python.ops.lookup_ops").lookup_table_export_v2
+
+    if "_LazyMod" not in dir():
+        class _LazyMod:
+            """Resolves attributes via factory functions on first access."""
+            def __init__(self, **factories):
+                object.__setattr__(self, '_fns', factories)
+                object.__setattr__(self, '_cache', {})
+            def __getattr__(self, name):
+                cache = object.__getattribute__(self, '_cache')
+                if name not in cache:
+                    cache[name] = object.__getattribute__(self, '_fns')[name]()
+                return cache[name]
+
+    lookup_ops = _LazyMod(
+        hash_table_v2=_resolve_hash_table_v2,
+        lookup_table_export_v2=_resolve_lookup_table_export_v2,
+    )
+
+try:
+    from tensorflow.python.util import compat
+except ImportError:
+    import types as _t
+    compat = _t.SimpleNamespace(
+        as_bytes=lambda s: s.encode("utf-8") if isinstance(s, str) else bytes(s),
+    )
+    del _t
 
 from tf2onnx import utils
-from tf2onnx.tf_utils import (get_tf_version, tflist_to_onnx, get_hash_table_info, replace_placeholders_with_tables,
-                              HashTableInfo)
+from tf2onnx.tf_utils import (
+    HashTableInfo,
+    get_hash_table_info,
+    get_tf_version,
+    replace_placeholders_with_tables,
+    tflist_to_onnx,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +110,7 @@ logger = logging.getLogger(__name__)
 
 
 def is_tf2():
-    return tf.__version__.startswith("2.")
+    return getattr(tf, '__version__', '2.').startswith("2.")
 
 
 def _not_implemented_tf_placeholder(name):
@@ -48,51 +132,69 @@ except ImportError:
 
 try:
     # pylint: disable=protected-access
-    from tensorflow.python.saved_model.load import _RestoredResource as TfRestoredResourceType
     from tensorflow.python.ops.lookup_ops import StaticHashTable as TfStaticHashTableType
+    from tensorflow.python.saved_model.load import _RestoredResource as TfRestoredResourceType
     from tensorflow.python.training.tracking.base import Trackable as TfTrackableType
 except ImportError:
     TfRestoredResourceType = tuple()  # isinstance(x, tuple()) is always false
     TfStaticHashTableType = tuple()
     TfTrackableType = tuple()
 
-if is_tf2():
-    convert_variables_to_constants = tf.compat.v1.graph_util.convert_variables_to_constants
-    from tensorflow.python.framework.convert_to_constants import convert_variables_to_constants_v2
-else:
-    from tensorflow.python.framework.graph_util import convert_variables_to_constants
+_UNSET = object()
 
-    convert_variables_to_constants_v2 = _not_implemented_tf_placeholder('convert_variables_to_constants_v2')
 
-if is_tf2():
-    tf_reset_default_graph = tf.compat.v1.reset_default_graph
-    tf_global_variables = tf.compat.v1.global_variables
-    tf_session = tf.compat.v1.Session  # pylint: disable=invalid-name
-    tf_graphdef = tf.compat.v1.GraphDef
-    tf_import_meta_graph = tf.compat.v1.train.import_meta_graph
-    tf_gfile = tf.io.gfile
-    tf_placeholder = tf.compat.v1.placeholder
-    tf_placeholder_with_default = tf.compat.v1.placeholder_with_default
-elif Version(tf.__version__) >= Version("1.13"):
-    # 1.13 introduced the compat namespace
-    tf_reset_default_graph = tf.compat.v1.reset_default_graph
-    tf_global_variables = tf.compat.v1.global_variables
-    tf_session = tf.compat.v1.Session  # pylint: disable=invalid-name
-    tf_graphdef = tf.compat.v1.GraphDef
-    tf_import_meta_graph = tf.compat.v1.train.import_meta_graph
-    tf_gfile = tf.gfile
-    tf_placeholder = tf.compat.v1.placeholder
-    tf_placeholder_with_default = tf.compat.v1.placeholder_with_default
-else:
-    # older than 1.13
-    tf_reset_default_graph = tf.reset_default_graph
-    tf_global_variables = tf.global_variables
-    tf_session = tf.Session  # pylint: disable=invalid-name
-    tf_graphdef = tf.GraphDef
-    tf_import_meta_graph = tf.train.import_meta_graph
-    tf_gfile = tf.gfile
-    tf_placeholder = tf.placeholder
-    tf_placeholder_with_default = tf.placeholder_with_default
+class _Lazy:
+    """Proxy that resolves a factory to a target object on first call or attribute access.
+
+    Used to defer TF symbol lookups to runtime, because tensorflow-intel on Windows
+    does not expose tf.compat / tf.io etc. during module import.
+    """
+    def __init__(self, factory):
+        object.__setattr__(self, '_f', factory)
+        object.__setattr__(self, '_v', _UNSET)
+
+    def _resolve(self):
+        v = object.__getattribute__(self, '_v')
+        if v is _UNSET:
+            v = object.__getattribute__(self, '_f')()
+            object.__setattr__(self, '_v', v)
+        return v
+
+    def __call__(self, *args, **kwargs):
+        return self._resolve()(*args, **kwargs)
+
+    def __getattr__(self, name):
+        return getattr(self._resolve(), name)
+
+
+def _has_compat():
+    return is_tf2() or Version(tf.__version__) >= Version("1.13")
+
+
+def _make_convert_variables_to_constants():
+    if is_tf2():
+        return tf.compat.v1.graph_util.convert_variables_to_constants
+    from tensorflow.python.framework.graph_util import convert_variables_to_constants as fn  # noqa: PLC0415
+    return fn
+
+
+def _make_convert_variables_to_constants_v2():
+    if is_tf2():
+        from tensorflow.python.framework.convert_to_constants import convert_variables_to_constants_v2 as fn  # noqa: PLC0415
+        return fn
+    return _not_implemented_tf_placeholder('convert_variables_to_constants_v2')
+
+
+convert_variables_to_constants = _Lazy(_make_convert_variables_to_constants)
+convert_variables_to_constants_v2 = _Lazy(_make_convert_variables_to_constants_v2)
+tf_reset_default_graph = _Lazy(lambda: tf.compat.v1.reset_default_graph if _has_compat() else tf.reset_default_graph)
+tf_global_variables = _Lazy(lambda: tf.compat.v1.global_variables if _has_compat() else tf.global_variables)
+tf_session = _Lazy(lambda: tf.compat.v1.Session if _has_compat() else tf.Session)  # pylint: disable=invalid-name
+tf_graphdef = _Lazy(lambda: tf.compat.v1.GraphDef if _has_compat() else tf.GraphDef)
+tf_import_meta_graph = _Lazy(lambda: tf.compat.v1.train.import_meta_graph if _has_compat() else tf.train.import_meta_graph)
+tf_gfile = _Lazy(lambda: tf.io.gfile if is_tf2() else tf.gfile)
+tf_placeholder = _Lazy(lambda: tf.compat.v1.placeholder if _has_compat() else tf.placeholder)
+tf_placeholder_with_default = _Lazy(lambda: tf.compat.v1.placeholder_with_default if _has_compat() else tf.placeholder_with_default)
 
 
 def inputs_without_resource(sess, input_names):
@@ -126,8 +228,9 @@ def convert_variables_to_constants_large_model(func):
 
     if tf.__version__.startswith("2.2."):
         try:
-            from tensorflow.python.framework.convert_to_constants import \
-                 _convert_variables_to_constants_v2_impl # pylint: disable=protected-access
+            from tensorflow.python.framework.convert_to_constants import (
+                _convert_variables_to_constants_v2_impl,  # pylint: disable=protected-access
+            )
         except ImportError:
             _not_implemented_tf_placeholder("_convert_variables_to_constants_v2_impl")()
         frozen_graph_def, _ = \
@@ -135,12 +238,14 @@ def convert_variables_to_constants_large_model(func):
         return frozen_graph_def
 
     try:
-        from tensorflow.python.framework.convert_to_constants import \
-            _FunctionConverterData, _replace_variables_by_constants # pylint: disable=protected-access
+        from tensorflow.python.framework.convert_to_constants import (
+            _FunctionConverterData,  # pylint: disable=protected-access
+            _replace_variables_by_constants,
+        )
     except ImportError:
         _not_implemented_tf_placeholder("_replace_variables_by_constants")()
 
-    from tensorflow.python.framework import tensor_util, tensor_shape
+    from tensorflow.python.framework import tensor_shape, tensor_util
     make_tensor_proto_original = tensor_util.make_tensor_proto
     # Hack to avoid 2GB check
     def make_tensor_proto_wrapped(values, dtype=None, shape=None, verify_shape=False, allow_broadcast=False):
@@ -160,8 +265,10 @@ def convert_variables_to_constants_large_model(func):
         function_converter = _FunctionConverterData
         if Version(tf.__version__) >= Version("2.6.0"):
             from tensorflow.python.eager import context
-            from tensorflow.python.framework.convert_to_constants import _FunctionConverterDataInEager, \
-                _FunctionConverterDataInGraph
+            from tensorflow.python.framework.convert_to_constants import (
+                _FunctionConverterDataInEager,
+                _FunctionConverterDataInGraph,
+            )
             if context.executing_eagerly():
                 function_converter = _FunctionConverterDataInEager
             else:
@@ -658,18 +765,26 @@ def from_saved_model(model_path, input_names, output_names, tag=None,
 def from_keras(model_path, input_names, output_names):
     """Load keras model - experimental for now."""
     from tensorflow import keras as _keras
-    from tensorflow.python.keras.saving import saving_utils as _saving_utils
 
     # Handles Keras when Eager mode is enabled.
     custom_objects = None
     with tf.device("/cpu:0"):
         if tf.executing_eagerly():
             _keras.backend.clear_session()
-            _keras.backend.set_learning_phase(False)
             keras_model = _keras.models.load_model(model_path, custom_objects)
 
-            function = _saving_utils.trace_model_call(keras_model)
-            concrete_func = function.get_concrete_function()
+            try:
+                from tensorflow.python.keras.saving import (
+                    saving_utils as _saving_utils,  # pylint: disable=import-outside-toplevel
+                )
+                function = _saving_utils.trace_model_call(keras_model)
+                concrete_func = function.get_concrete_function()
+            except (ImportError, AttributeError):
+                input_sig = [tf.TensorSpec(shape=inp.shape, dtype=inp.dtype) for inp in keras_model.inputs]
+                @tf.function(input_signature=input_sig)
+                def model_fn(*args):
+                    return keras_model(*args, training=False)
+                concrete_func = model_fn.get_concrete_function()
             # allow to pass inputs and outputs from caller if we don't want all of them
             input_names = [input_tensor.name for input_tensor in concrete_func.inputs
                            if input_tensor.dtype != tf.dtypes.resource]
@@ -679,7 +794,6 @@ def from_keras(model_path, input_names, output_names):
         else:
             # Handles Keras when Eager mode is disabled.
             _keras.backend.clear_session()
-            _keras.backend.set_learning_phase(False)
             keras_model = _keras.models.load_model(model_path, custom_objects)
             # allow to pass inputs and outputs from caller if we don't want all of them
             input_names = keras_model.inputs
@@ -695,7 +809,8 @@ def from_keras(model_path, input_names, output_names):
 
 
 def tf_optimize_grappler(input_names, output_names, graph_def):
-    from tensorflow.core.protobuf import meta_graph_pb2 as meta_graph_pb2, config_pb2, rewriter_config_pb2
+    from tensorflow.core.protobuf import config_pb2
+    from tensorflow.core.protobuf import meta_graph_pb2 as meta_graph_pb2
     from tensorflow.python.grappler import tf_optimizer as tf_opt
 
     config = config_pb2.ConfigProto()

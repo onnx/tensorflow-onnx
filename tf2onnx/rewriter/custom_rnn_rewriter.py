@@ -9,13 +9,13 @@ import logging
 import sys
 import traceback
 
-from onnx import onnx_pb
 import numpy as np
+from onnx import onnx_pb
 
-from tf2onnx.graph_builder import GraphBuilder
-from tf2onnx.rewriter.loop_rewriter_base import LoopRewriterBase, Context
-from tf2onnx.rewriter.rnn_utils import REWRITER_RESULT, get_rnn_scope_name, parse_rnn_loop
 from tf2onnx import utils
+from tf2onnx.graph_builder import GraphBuilder
+from tf2onnx.rewriter.loop_rewriter_base import Context, LoopRewriterBase
+from tf2onnx.rewriter.rnn_utils import REWRITER_RESULT, get_rnn_scope_name, parse_rnn_loop
 
 logger = logging.getLogger(__name__)
 

@@ -4,8 +4,10 @@
 """
 import math
 from itertools import permutations
+
 import numpy as np
-from onnx import helper, numpy_helper, TensorProto, AttributeProto
+from onnx import AttributeProto, TensorProto, helper, numpy_helper
+
 from .. import utils
 from ..constants import OPSET_TO_IR_VERSION, PREFERRED_OPSET
 from .optimizer_base import GraphOptimizerBase

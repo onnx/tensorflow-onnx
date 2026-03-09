@@ -1,16 +1,18 @@
 # SPDX-License-Identifier: Apache-2.0
 # pylint: disable=missing-docstring,unused-import,import-outside-toplevel,unused-variable
 import unittest
+
 from backend_test_base import Tf2OnnxBackendTestBase
 
 
 class TestIssue2025(Tf2OnnxBackendTestBase):
     def test_tanhgrad(self):
 
+        import numpy as np
         import tensorflow as tf
+
         import tf2onnx
         from tf2onnx.handler import tf_op
-        import numpy as np
 
         @tf_op("TanhGrad")
         class TanhGrad:

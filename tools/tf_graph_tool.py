@@ -4,16 +4,16 @@
 """ Tool for common tf graph operations. """
 
 import argparse
-from collections import Counter
+import copy
 import logging
 import os
 import sys
-import copy
+from collections import Counter
 
-from google.protobuf import text_format
 import tensorflow as tf
-from tensorflow.python.framework import graph_util
+from google.protobuf import text_format
 from tensorflow.core.framework import attr_value_pb2, graph_pb2, node_def_pb2
+from tensorflow.python.framework import graph_util
 
 # pylint: disable=missing-docstring
 

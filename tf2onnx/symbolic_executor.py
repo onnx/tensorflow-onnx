@@ -6,8 +6,8 @@
 """
 
 import numpy as np
-from tf2onnx import utils
 
+from tf2onnx import utils
 
 # pylint: disable=logging-not-lazy,unused-argument,missing-docstring
 
