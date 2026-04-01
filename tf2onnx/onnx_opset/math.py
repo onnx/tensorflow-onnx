@@ -20,9 +20,42 @@ logger = logging.getLogger(__name__)
 
 # pylint: disable=unused-argument,missing-docstring
 
+
 @tf_op(["Add", "AddV2", "Div", "Mul", "Sub"])
 class BroadcastOp(common.BroadcastOp):
-    pass
+    @classmethod
+    def version_1(cls, ctx, node, **kwargs):
+        input_shapes = [ctx.get_shape(inp) for inp in node.input]
+
+        if len(input_shapes) == 2 and all(input_shapes):
+            s1, s2 = input_shapes
+
+            if len(s1) != len(s2):
+                if len(s1) < len(s2):
+                    small_idx = 0
+                    big_idx = 1
+                else:
+                    small_idx = 1
+                    big_idx = 0
+
+                small_input = node.input[small_idx]
+                big_input = node.input[big_idx]
+
+                try:
+                    shape_node = ctx.make_node("Shape", [big_input]).output[0]
+
+                    expanded = ctx.make_node(
+                        "Expand",
+                        [small_input, shape_node],
+                        name=node.name + "_expand"
+                    ).output[0]
+
+                    node.input[small_idx] = expanded
+
+                except Exception as e:
+                    logger.warning("BroadcastOp Expand failed: %s", e)
+
+        super(BroadcastOp, cls).version_1(ctx, node, **kwargs)
 
 
 @tf_op(["RealDiv", "TruncateDiv"], onnx_op="Div")
