@@ -37,7 +37,7 @@ jobs:
           onnx_version: '1.16.1'
       - name: Upload Test Results
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: Test Results (${{ matrix.os }}-tf${{ matrix.tf_version }})
           path: junit/test-results.xml

@@ -40,7 +40,7 @@ jobs:
           skip_tflite: 'False'
       - name: Upload Test Results
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: Test Results (${{ matrix.os }}-tf${{ matrix.tf_version }}-opset${{ matrix.opset_version }})
           path: junit/test-results.xml
