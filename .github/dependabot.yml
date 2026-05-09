@@ -4,18 +4,6 @@
 
 version: 2
 updates:
-  - package-ecosystem: "pip" # See documentation for possible values
-    directory: "/" # Location of package manifests
-    schedule:
-      interval: "monthly"
-    cooldown:
-      default-days: 7
-    ignore:
-      # Only update them manually since updating them might break compatibility
-      - dependency-name: "numpy"
-      - dependency-name: "protobuf"
-    open-pull-requests-limit: 10
-
   - package-ecosystem: "github-actions"
     # Workflow files stored in the
     # default location of `.github/workflows`
@@ -24,6 +12,6 @@ updates:
       interval: "monthly"
     cooldown:
       default-days: 7
-        open-pull-requests-l
+    open-pull-requests-limit: 10
     labels:
       - "github_actions"
