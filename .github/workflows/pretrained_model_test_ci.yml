@@ -27,7 +27,7 @@ jobs:
         opset_version: ['18', '15']
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
       - uses: ./.github/actions/pretrained_model_test
@@ -40,7 +40,7 @@ jobs:
           skip_tflite: 'False'
       - name: Upload Test Results
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: Test Results (${{ matrix.os }}-tf${{ matrix.tf_version }}-opset${{ matrix.opset_version }})
           path: junit/test-results.xml
@@ -55,10 +55,10 @@ jobs:
     if: always()
     steps:
       - name: Download Artifacts
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           path: artifacts
       - name: Publish Test Results
-        uses: EnricoMi/publish-unit-test-result-action@v2
+        uses: EnricoMi/publish-unit-test-result-action@2ceeed2b8f26e15b06c3846719f75354febd9e7b # v2
         with:
           files: "artifacts/**/*.xml"
