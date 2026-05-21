@@ -39,33 +39,39 @@ class FakeQuantWithMinMaxArgs:
         narrow_range = node.get_attr("narrow_range").i
         num_bits = node.get_attr("num_bits").i
 
-        make_sure(
-            not narrow_range,
-            "Unable to convert node FakeQuantWithMinMaxArgs with narrow_range=%r",
+        logger.debug(
+            "Convert node FakeQuantWithMinMaxArgs with narrow_range=%r",
             narrow_range)
         make_sure(
             num_bits == 8,
             "Unable to convert node FakeQuantWithMinMaxArgs with "
             "num_bits=%r", num_bits)
 
-        scale = (amax - amin) / (2 ** num_bits - 1)
-        min_adj = np.around(amin / scale)
+        # Allow narrow_range since TensorRT requires quantized range to be (-127, 127)
+        if narrow_range:
+            scale = amax / (2**(num_bits-1)-1)
+            idtype = TensorProto.INT8
+            zero = np.zeros(np.array(amin).shape, dtype=np.int8)
+        else:
+            scale = (amax - amin) / (2 ** num_bits - 1)
+            min_adj = np.around(amin / scale)
+            idtype = TensorProto.UINT8
+            zero = np.array(-min_adj, dtype=np.uint8)
+            make_sure(
+                zero == -min_adj,
+                "Cannot convert %s node %s with "
+                "min=%r max=%r numbits=%r because zero_scale=%r "
+                "is outside uint8 boundary",
+                node.type, node.name, amin, amax, num_bits, -min_adj)
 
         dtype = ctx.get_dtype(node.input[0])
         shape = ctx.get_shape(node.input[0])
         axis = 1
-        idtype = TensorProto.UINT8
-
+    
         pb_scale = ctx.make_const(
             utils.make_name("{}_scaley".format(node.name)),
             np.array(scale, dtype=np.float32))
-        zero = np.array(-min_adj, dtype=np.uint8)
-        make_sure(
-            zero == -min_adj,
-            "Cannot convert %s node %s with "
-            "min=%r max=%r numbits=%r because zero_scale=%r "
-            "is outside uint8 boundary",
-            node.type, node.name, amin, amax, num_bits, -min_adj)
+        
         zero_point = ctx.make_const(
             utils.make_name("{}_zpy".format(node.name)), zero)
 
