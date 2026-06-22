@@ -312,10 +312,11 @@ class TransposeOptimizer(GraphOptimizerBase):
             self._g.set_shape(node.output[0], new_shape)
             self._g.set_shape(trans.output[0], shape)
         return True
+
     # this is for the case where node has multiple outputs. e.g. split node.
     def _switch_transpose_and_node_with_multiple_outputs(self, node, trans, update_shape=True):
         input_index = self._get_input_index_for_trans(node, trans)
-        for idx,_output in enumerate(node.output):
+        for idx, _output in enumerate(node.output):
             shape = self._g.get_shape(_output)
             nxt_nodes = self._g.find_output_consumers(_output)
             if idx == 0:
@@ -326,7 +327,7 @@ class TransposeOptimizer(GraphOptimizerBase):
                 transpose = self._g.make_node("Transpose", [_output], attr={"perm": trans.get_attr_value("perm")})
             for nxt_node in nxt_nodes:
                 self._g.replace_input(nxt_node, _output, transpose.output[0])
-                
+
             if update_shape and shape:
                 perm_inv = invert_perm(transpose.get_attr_value("perm"))
                 new_shape = [shape[i] for i in perm_inv]
@@ -715,20 +716,20 @@ class TransposeOptimizer(GraphOptimizerBase):
                 new_axes_const = self._g.make_const(utils.make_name(node.inputs[1].name), new_axes_np)
                 self._g.replace_inputs(node, [node.input[0], new_axes_const.output[0]])
             return True
-        # handling having branches
+        # Split with more than 1 output (the single-output case is handled above by
+        # _handle_node_having_branches, which bails out when len(node.output) != 1).
         if len(node.output) > 1:
+            perm = trans.get_attr_value("perm")
             trans_rank = get_transpose_rank(trans)
-            axes = node.get_attr_value("axis", 0)
-            perm = trans.get_attr("perm").ints
-            axes = [axes + trans_rank if axes < 0 else axes]
-            if split:
-                new_axes_np = np.array(split, dtype=np.int64)
-                new_axes_const = self._g.make_const(utils.make_name(node.inputs[1].name), new_axes_np)
+            axis = node.get_attr_value("axis", 0)
+            if axis < 0:
+                axis += trans_rank
             # [Transpose -> Split -> next_nodes] -> [Split -> Transpose -> next_nodes]
-            if not self._switch_transpose_and_node_with_multiple_outputs(node, trans, 1):
+            # The split sizes stay the same; only the axis is relabelled to the
+            # pre-transpose layout. ONNX Split's "axis" is a scalar int attribute.
+            if not self._switch_transpose_and_node_with_multiple_outputs(node, trans):
                 return False
-            new_axes = [perm[a] for a in axes]
-            node.set_attr("axes", new_axes)
+            node.set_attr("axis", perm[axis])
             return True
         return False
 
