@@ -56,4 +56,5 @@ ENV_TF2ONNX_CATCH_ERRORS = "TF2ONNX_CATCH_ERRORS"
 # Refer from https://github.com/onnx/onnx/blob/main/docs/Versioning.md#released-versions
 OPSET_TO_IR_VERSION = {
     1: 3, 2: 3, 3: 3, 4: 3, 5: 3, 6: 3, 7: 4, 8: 4, 9: 4, 10: 5, 11: 6, 12: 7, 13: 7, 14: 7, 15: 8, 16: 8, 17: 8, 18: 8
+    19: 9, 20: 9, 21: 10, 22: 10, 23: 11, 24: 12, 25: 13, 26: 13,
 }
