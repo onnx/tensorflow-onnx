@@ -1187,6 +1187,36 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
                                    model_proto, remaining_transpose_num=0)
 
     @parameterized.expand([
+        ((1, 5, 3, 3), (5, 16, 1, 1), (1, 16, 3, 3), (1, 1, 1, 16), [0, 2, 3, 1], [0, 3, 1, 2]),
+        ((1, 5, 3, 3, 3), (5, 16, 1, 1, 1), (1, 16, 3, 3, 3), (1, 1, 1, 1, 16), [0, 2, 3, 4, 1], [0, 4, 1, 2, 3]),
+    ])
+    def test_transpose_add_with_convtranspose_1(self, input_shape, weights_shape, output_shape,
+                                                const_shape, perm_input, perm_output):
+        # case where bias's dim is 1D and can be merged into Conv
+        const_b_val = np.random.randn(*const_shape).astype(np.float32)
+        const_b = helper.make_tensor("const_b", TensorProto.FLOAT, const_shape, const_b_val.flatten())
+        const_b_node = helper.make_node("Constant", [], ["const_b"], value=const_b, name="const_b")
+
+        node0 = helper.make_node("ConvTranspose", ["x", "W"], ["X"], name="conv", pads=[0] * 2 * (len(input_shape) - 2))
+        node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=perm_input, name="trans_1")
+        node2 = helper.make_node("Add", ["Y", "const_b"], ["Z"], name="add")
+        node3 = helper.make_node("Transpose", ["Z"], ["res"], perm=perm_output, name="trans_2")
+
+        graph = helper.make_graph(
+            [const_b_node, node0, node1, node2, node3],
+            "transpose-add-test-with-conv-1",
+            [helper.make_tensor_value_info("x", TensorProto.FLOAT, input_shape),
+             helper.make_tensor_value_info("W", TensorProto.FLOAT, weights_shape)],
+            [helper.make_tensor_value_info("res", TensorProto.FLOAT, output_shape)],
+        )
+
+        model_proto = self.make_model(graph, producer_name="onnx-tests")
+        # Ensure that the add gets merged into the ConvTranspose
+        self.run_and_compare(["res"], {"x": np.random.randn(*input_shape).astype(np.float32),
+                                       "W": np.random.randn(*weights_shape).astype(np.float32)},
+                             model_proto, op_type="Add", remaining_op_num=0)
+
+    @parameterized.expand([
         ((1, 1, 5, 5), (1, 1, 3, 3), (1, 1, 3, 3), (1, 3, 1, 1), [0, 2, 3, 1], [0, 3, 1, 2]),
         ((1, 1, 5, 5, 5), (1, 1, 3, 3, 3), (1, 1, 3, 3, 3), (1, 3, 1, 1, 1), [0, 2, 3, 4, 1], [0, 4, 1, 2, 3]),
         ((1, 1, 5, 5), (1, 1, 3, 3), (3, 3, 3, 3), (3, 1, 3, 3), [0, 2, 3, 1], [0, 3, 1, 2]),

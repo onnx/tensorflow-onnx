@@ -495,9 +495,16 @@ class TransposeOptimizer(GraphOptimizerBase):
                     return self._handle_node_having_branches(trans, node)
 
                 bias_size = max(numpy_val.shape)
-                size_m = t_p.inputs[1].output_shapes[0][0]
+                if (t_p.type == "ConvTranspose"):
+                    # ConvTranspose node weight shape is C x (M/group) x kH x kW
+                    size_m = t_p.inputs[1].output_shapes[0][1]
+                else:
+                    # Conv node weight shape is M x (C/group) x kH x kW
+                    size_m = t_p.inputs[1].output_shapes[0][0]
+
                 if bias_size != size_m:
-                    self.logger.debug("Bias size is not M, can not merge Conv and Add")
+                    self.logger.debug("Bias size %d is not M (%d, from input shape %s), can not merge Conv and Add",
+                                      bias_size, size_m, t_p.inputs[1].output_shapes[0])
                     return self._handle_node_having_branches(trans, node)
 
                 target_val = numpy_val.reshape(bias_size)
