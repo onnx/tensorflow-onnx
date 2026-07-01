@@ -701,7 +701,6 @@ class TransposeOptimizer(GraphOptimizerBase):
         return False
 
     def _split_handler(self, trans, node):
-        # Todo: need handle cases where Split node has more than 1 outputs.
         split = None
         if self._g.opset >= 13 and len(node.input) > 1 and node.inputs[1].is_const():
             # split is an input not attr since opset 13
@@ -719,6 +718,12 @@ class TransposeOptimizer(GraphOptimizerBase):
         # Split with more than 1 output (the single-output case is handled above by
         # _handle_node_having_branches, which bails out when len(node.output) != 1).
         if len(node.output) > 1:
+            # _switch_transpose_and_node_with_multiple_outputs rewires `trans` to consume
+            # the Split output. If `trans` feeds more than just this Split, that rewrite
+            # would change the value seen by the other consumers and corrupt the graph, so
+            # only proceed when `trans` is exclusively consumed here.
+            if not self._nodes_has_single_consumer_node([trans]):
+                return False
             perm = trans.get_attr_value("perm")
             trans_rank = get_transpose_rank(trans)
             axis = node.get_attr_value("axis", 0)

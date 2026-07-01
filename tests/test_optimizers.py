@@ -201,8 +201,6 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         # Split with more than one output: the transpose must be pushed past each branch
         # so that no Transpose remains and the result stays numerically identical.
         input_shape_with_trans = [input_shape[i] for i in perm]
-        output_before_trans = list(input_shape)
-        output_shape = [output_before_trans[i] for i in perm]
         for axis in range(len(input_shape)):
             if input_shape[axis] % 2 != 0:
                 continue
