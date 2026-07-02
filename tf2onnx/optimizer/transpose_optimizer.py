@@ -315,16 +315,6 @@ class TransposeOptimizer(GraphOptimizerBase):
 
     # this is for the case where node has multiple outputs. e.g. split node.
     def _switch_transpose_and_node_with_multiple_outputs(self, node, trans, update_shape=True):
-        # Purely defensive guard, mirroring _handle_nhwc_tranpose's `trans.output[0] in
-        # outputs` check. Each output needs a compensating Transpose between `node` and its
-        # consumers; a graph-output edge has no node-consumer to redirect, so the switch
-        # would expose the pre-transpose (NCHW) layout at that output and, for idx > 0, leave
-        # an orphaned Transpose behind. Note: the normal pipeline buffers every graph output
-        # with an Identity (Graph.__init__), so this condition has not been observed to fire
-        # end-to-end -- the Split is always processed while its outputs are still buffered.
-        # Kept only for symmetry/safety; if you can prove it is unreachable, it can go.
-        if any(out in self._g.outputs for out in node.output):
-            return False
         input_index = self._get_input_index_for_trans(node, trans)
         for idx, _output in enumerate(node.output):
             shape = self._g.get_shape(_output)
@@ -730,8 +720,7 @@ class TransposeOptimizer(GraphOptimizerBase):
                 axis += get_transpose_rank(trans)
             # [Transpose -> Split -> next] -> [Split -> Transpose -> next]; the split sizes
             # stay the same, only the axis is relabelled to the pre-transpose layout.
-            if not self._switch_transpose_and_node_with_multiple_outputs(node, trans):
-                return False
+            self._switch_transpose_and_node_with_multiple_outputs(node, trans)
             node.set_attr("axis", perm[axis])
             return True
 
