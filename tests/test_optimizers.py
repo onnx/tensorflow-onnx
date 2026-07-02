@@ -227,6 +227,113 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
             feed_dict = {"X": np.random.randn(*input_shape_with_trans).astype(np.float32)}
             self.run_transpose_compare(["res0", "res1"], feed_dict, model_proto, remaining_transpose_num=0)
 
+    @check_opset_min_version(13, "Split split-sizes became an input in opset 13")
+    def test_transpose_with_split_multiple_outputs_split_input(self):
+        # opset>=13 multi-output Split with an explicit, uneven split-sizes INPUT. The
+        # multi-output path relabels only the axis and must leave the split-sizes const
+        # intact -- a mangled (non-vector) split const would make onnxruntime reject the
+        # model. Uneven sizes make any accidental resize observable.
+        perm = [0, 3, 1, 2]
+        inner_perm = [0, 2, 3, 1]
+        input_shape = [2, 3, 4, 8]                       # logical (post-inner-transpose) shape
+        input_shape_with_trans = [input_shape[i] for i in perm]
+        axis = 3                                          # split the size-8 logical axis
+        sizes = [3, 5]
+        split_const = self._make_onnx_const(np.array(sizes, dtype=np.int64), "split_sizes")
+        node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=inner_perm, name="trans1")
+        node2 = helper.make_node("Split", ["Y", "split_sizes"], ["Z0", "Z1"], axis=axis, name="split")
+        node3 = helper.make_node("Transpose", ["Z0"], ["res0"], perm=perm, name="trans2")
+        node4 = helper.make_node("Transpose", ["Z1"], ["res1"], perm=perm, name="trans3")
+
+        z0 = list(input_shape); z0[axis] = sizes[0]
+        z1 = list(input_shape); z1[axis] = sizes[1]
+        graph = helper.make_graph(
+            [split_const, node1, node2, node3, node4],
+            "test_transpose_with_split_multiple_outputs_split_input",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, input_shape_with_trans)],
+            [helper.make_tensor_value_info("res0", TensorProto.FLOAT, [z0[i] for i in perm]),
+             helper.make_tensor_value_info("res1", TensorProto.FLOAT, [z1[i] for i in perm])],
+        )
+
+        model_proto = self.make_model(graph, producer_name="onnx-tests")
+        feed_dict = {"X": np.random.randn(*input_shape_with_trans).astype(np.float32)}
+        self.run_transpose_compare(["res0", "res1"], feed_dict, model_proto, remaining_transpose_num=0)
+
+    @parameterized.expand([
+        ((2, 3, 4, 6), [0, 3, 1, 2], [0, 2, 3, 1]),
+        ((2, 3, 4, 6, 8), [0, 4, 1, 2, 3], [0, 2, 3, 4, 1]),
+    ])
+    def test_transpose_with_split_outputs_are_graph_outputs(self, input_shape, perm, inner_perm):
+        # Multi-output Split whose outputs are the graph outputs (no downstream Transpose to
+        # cancel with). The upstream Transpose is pushed past the Split, producing one
+        # compensating Transpose per branch that feeds the graph output. There is nothing to
+        # fold them into, so both Transposes must remain and the result must stay numerically
+        # identical to the unoptimized graph. Regression guard for the multi-output switch
+        # interacting with graph-output edges.
+        input_shape_with_trans = [input_shape[i] for i in perm]
+        for axis in range(len(input_shape)):
+            if input_shape[axis] % 2 != 0:
+                continue
+            node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=inner_perm, name="trans1")
+            if self.config.opset < 18:
+                node2 = helper.make_node("Split", ["Y"], ["res0", "res1"], axis=axis, name="split")
+            else:
+                node2 = helper.make_node("Split", ["Y"], ["res0", "res1"], axis=axis, name="split", num_outputs=2)
+
+            half = list(input_shape)
+            half[axis] //= 2
+            graph = helper.make_graph(
+                [node1, node2],
+                "test_transpose_with_split_outputs_are_graph_outputs",
+                [helper.make_tensor_value_info("X", TensorProto.FLOAT, input_shape_with_trans)],
+                [helper.make_tensor_value_info("res0", TensorProto.FLOAT, half),
+                 helper.make_tensor_value_info("res1", TensorProto.FLOAT, half)],
+            )
+
+            model_proto = self.make_model(graph, producer_name="onnx-tests")
+            feed_dict = {"X": np.random.randn(*input_shape_with_trans).astype(np.float32)}
+            # One compensating Transpose per graph-output branch survives (nothing to fold into).
+            self.run_transpose_compare(["res0", "res1"], feed_dict, model_proto, remaining_transpose_num=2)
+
+    def test_split_multi_output_graph_output_guard(self):
+        # White-box test for the defensive graph-output guard in the multi-output Split
+        # switch. Graph.__init__ buffers every graph output with an Identity, so end-to-end
+        # a Split output is never itself a graph output; this state only arises mid-
+        # optimization once that buffer has been folded away. We build it directly: attach a
+        # raw Split output to graph.outputs (no Identity), then assert _split_handler bails
+        # (returns False) and leaves the Split axis / input wiring untouched. Without the
+        # guard the switch relabels the axis and rewires the input, silently exposing the
+        # pre-transpose (NCHW) layout at that graph output.
+        from tf2onnx.optimizer.transpose_optimizer import TransposeOptimizer
+        node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 3, 1, 2], name="trans1")
+        if self.config.opset < 18:
+            node2 = helper.make_node("Split", ["Y"], ["Z0", "Z1"], axis=1, name="split")
+        else:
+            node2 = helper.make_node("Split", ["Y"], ["Z0", "Z1"], axis=1, name="split", num_outputs=2)
+        # "keep" is the only declared graph output, so Graph.__init__ buffers it (not Z0/Z1).
+        node3 = helper.make_node("Identity", ["Z0"], ["keep"], name="keep0")
+        graph = helper.make_graph(
+            [node1, node2, node3],
+            "test_split_multi_output_graph_output_guard",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, [2, 4, 6, 8])],
+            [helper.make_tensor_value_info("keep", TensorProto.FLOAT, [2, 4, 3, 8])],
+        )
+        g = GraphUtil.create_graph_from_onnx_model(self.make_model(graph, producer_name="onnx-tests"))
+        split = g.get_node_by_name("split")
+        trans = g.get_node_by_name("trans1")
+        # Inject the vulnerable state: a raw Split output becomes a graph output (no Identity).
+        g.outputs = list(g.outputs) + [split.output[1]]
+
+        opt = TransposeOptimizer()
+        opt._g = g  # pylint: disable=protected-access
+        before_axis = split.get_attr_value("axis")
+        before_input = split.input[0]
+        handled = opt._split_handler(trans, split)  # pylint: disable=protected-access
+
+        self.assertFalse(handled, "the switch must bail when a Split output is a graph output")
+        self.assertEqual(split.get_attr_value("axis"), before_axis, "Split axis must be untouched")
+        self.assertEqual(split.input[0], before_input, "Split input wiring must be untouched")
+
     @parameterized.expand([
         ((2, 3, 4), [2, 0, 1], [1, 2, 0]),
         ((2, 3, 4, 5), [0, 2, 3, 1], [0, 3, 1, 2]),
