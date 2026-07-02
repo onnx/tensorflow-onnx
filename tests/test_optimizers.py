@@ -245,8 +245,10 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         node3 = helper.make_node("Transpose", ["Z0"], ["res0"], perm=perm, name="trans2")
         node4 = helper.make_node("Transpose", ["Z1"], ["res1"], perm=perm, name="trans3")
 
-        z0 = list(input_shape); z0[axis] = sizes[0]
-        z1 = list(input_shape); z1[axis] = sizes[1]
+        z0 = list(input_shape)
+        z0[axis] = sizes[0]
+        z1 = list(input_shape)
+        z1[axis] = sizes[1]
         graph = helper.make_graph(
             [split_const, node1, node2, node3, node4],
             "test_transpose_with_split_multiple_outputs_split_input",
