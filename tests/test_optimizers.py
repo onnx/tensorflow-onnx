@@ -295,44 +295,33 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
             # One compensating Transpose per graph-output branch survives (nothing to fold into).
             self.run_transpose_compare(["res0", "res1"], feed_dict, model_proto, remaining_transpose_num=2)
 
-    def test_split_multi_output_graph_output_guard(self):
-        # White-box test for the defensive graph-output guard in the multi-output Split
-        # switch. Graph.__init__ buffers every graph output with an Identity, so end-to-end
-        # a Split output is never itself a graph output; this state only arises mid-
-        # optimization once that buffer has been folded away. We build it directly: attach a
-        # raw Split output to graph.outputs (no Identity), then assert _split_handler bails
-        # (returns False) and leaves the Split axis / input wiring untouched. Without the
-        # guard the switch relabels the axis and rewires the input, silently exposing the
-        # pre-transpose (NCHW) layout at that graph output.
-        from tf2onnx.optimizer.transpose_optimizer import TransposeOptimizer
-        node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 3, 1, 2], name="trans1")
+    def test_transpose_with_split_at_graph_tail(self):
+        # End-to-end dummy model ending in a multi-output Split whose branches are the graph
+        # outputs, fed by a realistic Relu -> Transpose (NHWC->NCHW) head. Exercises the full
+        # optimizer pipeline (including the identity optimizer that can rename a producer's
+        # output to a graph-output name between transpose passes). The transpose is pushed
+        # past the Split; one compensating Transpose per branch survives (nothing downstream
+        # to fold into) and the result must stay numerically identical.
+        perm = [0, 3, 1, 2]                               # NHWC -> NCHW
+        input_shape = [2, 4, 6, 8]                        # NHWC
+        channels = input_shape[3]                         # split the channel axis
+        half = [input_shape[0], channels // 2, input_shape[1], input_shape[2]]  # NCHW half
+        node1 = helper.make_node("Relu", ["X"], ["R"], name="relu")
+        node2 = helper.make_node("Transpose", ["R"], ["Y"], perm=perm, name="trans")
         if self.config.opset < 18:
-            node2 = helper.make_node("Split", ["Y"], ["Z0", "Z1"], axis=1, name="split")
+            node3 = helper.make_node("Split", ["Y"], ["res0", "res1"], axis=1, name="split")
         else:
-            node2 = helper.make_node("Split", ["Y"], ["Z0", "Z1"], axis=1, name="split", num_outputs=2)
-        # "keep" is the only declared graph output, so Graph.__init__ buffers it (not Z0/Z1).
-        node3 = helper.make_node("Identity", ["Z0"], ["keep"], name="keep0")
+            node3 = helper.make_node("Split", ["Y"], ["res0", "res1"], axis=1, name="split", num_outputs=2)
         graph = helper.make_graph(
             [node1, node2, node3],
-            "test_split_multi_output_graph_output_guard",
-            [helper.make_tensor_value_info("X", TensorProto.FLOAT, [2, 4, 6, 8])],
-            [helper.make_tensor_value_info("keep", TensorProto.FLOAT, [2, 4, 3, 8])],
+            "test_transpose_with_split_at_graph_tail",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, input_shape)],
+            [helper.make_tensor_value_info("res0", TensorProto.FLOAT, half),
+             helper.make_tensor_value_info("res1", TensorProto.FLOAT, half)],
         )
-        g = GraphUtil.create_graph_from_onnx_model(self.make_model(graph, producer_name="onnx-tests"))
-        split = g.get_node_by_name("split")
-        trans = g.get_node_by_name("trans1")
-        # Inject the vulnerable state: a raw Split output becomes a graph output (no Identity).
-        g.outputs = list(g.outputs) + [split.output[1]]
-
-        opt = TransposeOptimizer()
-        opt._g = g  # pylint: disable=protected-access
-        before_axis = split.get_attr_value("axis")
-        before_input = split.input[0]
-        handled = opt._split_handler(trans, split)  # pylint: disable=protected-access
-
-        self.assertFalse(handled, "the switch must bail when a Split output is a graph output")
-        self.assertEqual(split.get_attr_value("axis"), before_axis, "Split axis must be untouched")
-        self.assertEqual(split.input[0], before_input, "Split input wiring must be untouched")
+        model_proto = self.make_model(graph, producer_name="onnx-tests")
+        feed_dict = {"X": np.random.randn(*input_shape).astype(np.float32)}
+        self.run_transpose_compare(["res0", "res1"], feed_dict, model_proto, remaining_transpose_num=2)
 
     @parameterized.expand([
         ((2, 3, 4), [2, 0, 1], [1, 2, 0]),
