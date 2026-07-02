@@ -194,6 +194,136 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
                                    model_proto, remaining_transpose_num=0)
 
     @parameterized.expand([
+        ((2, 3, 4, 6), [0, 3, 1, 2], [0, 2, 3, 1]),
+        ((2, 3, 4, 6, 8), [0, 4, 1, 2, 3], [0, 2, 3, 4, 1]),
+    ])
+    def test_transpose_with_split_multiple_outputs(self, input_shape, perm, inner_perm):
+        # Split with more than one output: the transpose must be pushed past each branch
+        # so that no Transpose remains and the result stays numerically identical.
+        input_shape_with_trans = [input_shape[i] for i in perm]
+        for axis in range(len(input_shape)):
+            if input_shape[axis] % 2 != 0:
+                continue
+            node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=inner_perm, name="trans1")
+            if self.config.opset < 18:
+                node2 = helper.make_node("Split", ["Y"], ["Z0", "Z1"], axis=axis, name="split")
+            else:
+                node2 = helper.make_node("Split", ["Y"], ["Z0", "Z1"], axis=axis, name="split", num_outputs=2)
+            node3 = helper.make_node("Transpose", ["Z0"], ["res0"], perm=perm, name="trans2")
+            node4 = helper.make_node("Transpose", ["Z1"], ["res1"], perm=perm, name="trans3")
+
+            half = list(input_shape)
+            half[axis] //= 2
+            output_half = [half[i] for i in perm]
+            graph = helper.make_graph(
+                [node1, node2, node3, node4],
+                "test_transpose_with_split_multiple_outputs",
+                [helper.make_tensor_value_info("X", TensorProto.FLOAT, input_shape_with_trans)],
+                [helper.make_tensor_value_info("res0", TensorProto.FLOAT, output_half),
+                 helper.make_tensor_value_info("res1", TensorProto.FLOAT, output_half)],
+            )
+
+            model_proto = self.make_model(graph, producer_name="onnx-tests")
+            feed_dict = {"X": np.random.randn(*input_shape_with_trans).astype(np.float32)}
+            self.run_transpose_compare(["res0", "res1"], feed_dict, model_proto, remaining_transpose_num=0)
+
+    @check_opset_min_version(13, "Split split-sizes became an input in opset 13")
+    def test_transpose_with_split_multiple_outputs_split_input(self):
+        # opset>=13 multi-output Split with an explicit, uneven split-sizes INPUT. The
+        # multi-output path relabels only the axis and must leave the split-sizes const
+        # intact -- a mangled (non-vector) split const would make onnxruntime reject the
+        # model. Uneven sizes make any accidental resize observable.
+        perm = [0, 3, 1, 2]
+        inner_perm = [0, 2, 3, 1]
+        input_shape = [2, 3, 4, 8]                       # logical (post-inner-transpose) shape
+        input_shape_with_trans = [input_shape[i] for i in perm]
+        axis = 3                                          # split the size-8 logical axis
+        sizes = [3, 5]
+        split_const = self._make_onnx_const(np.array(sizes, dtype=np.int64), "split_sizes")
+        node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=inner_perm, name="trans1")
+        node2 = helper.make_node("Split", ["Y", "split_sizes"], ["Z0", "Z1"], axis=axis, name="split")
+        node3 = helper.make_node("Transpose", ["Z0"], ["res0"], perm=perm, name="trans2")
+        node4 = helper.make_node("Transpose", ["Z1"], ["res1"], perm=perm, name="trans3")
+
+        z0 = list(input_shape); z0[axis] = sizes[0]
+        z1 = list(input_shape); z1[axis] = sizes[1]
+        graph = helper.make_graph(
+            [split_const, node1, node2, node3, node4],
+            "test_transpose_with_split_multiple_outputs_split_input",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, input_shape_with_trans)],
+            [helper.make_tensor_value_info("res0", TensorProto.FLOAT, [z0[i] for i in perm]),
+             helper.make_tensor_value_info("res1", TensorProto.FLOAT, [z1[i] for i in perm])],
+        )
+
+        model_proto = self.make_model(graph, producer_name="onnx-tests")
+        feed_dict = {"X": np.random.randn(*input_shape_with_trans).astype(np.float32)}
+        self.run_transpose_compare(["res0", "res1"], feed_dict, model_proto, remaining_transpose_num=0)
+
+    @parameterized.expand([
+        ((2, 3, 4, 6), [0, 3, 1, 2], [0, 2, 3, 1]),
+        ((2, 3, 4, 6, 8), [0, 4, 1, 2, 3], [0, 2, 3, 4, 1]),
+    ])
+    def test_transpose_with_split_outputs_are_graph_outputs(self, input_shape, perm, inner_perm):
+        # Multi-output Split whose outputs are the graph outputs (no downstream Transpose to
+        # cancel with). The upstream Transpose is pushed past the Split, producing one
+        # compensating Transpose per branch that feeds the graph output. There is nothing to
+        # fold them into, so both Transposes must remain and the result must stay numerically
+        # identical to the unoptimized graph. Regression guard for the multi-output switch
+        # interacting with graph-output edges.
+        input_shape_with_trans = [input_shape[i] for i in perm]
+        for axis in range(len(input_shape)):
+            if input_shape[axis] % 2 != 0:
+                continue
+            node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=inner_perm, name="trans1")
+            if self.config.opset < 18:
+                node2 = helper.make_node("Split", ["Y"], ["res0", "res1"], axis=axis, name="split")
+            else:
+                node2 = helper.make_node("Split", ["Y"], ["res0", "res1"], axis=axis, name="split", num_outputs=2)
+
+            half = list(input_shape)
+            half[axis] //= 2
+            graph = helper.make_graph(
+                [node1, node2],
+                "test_transpose_with_split_outputs_are_graph_outputs",
+                [helper.make_tensor_value_info("X", TensorProto.FLOAT, input_shape_with_trans)],
+                [helper.make_tensor_value_info("res0", TensorProto.FLOAT, half),
+                 helper.make_tensor_value_info("res1", TensorProto.FLOAT, half)],
+            )
+
+            model_proto = self.make_model(graph, producer_name="onnx-tests")
+            feed_dict = {"X": np.random.randn(*input_shape_with_trans).astype(np.float32)}
+            # One compensating Transpose per graph-output branch survives (nothing to fold into).
+            self.run_transpose_compare(["res0", "res1"], feed_dict, model_proto, remaining_transpose_num=2)
+
+    def test_transpose_with_split_at_graph_tail(self):
+        # End-to-end dummy model ending in a multi-output Split whose branches are the graph
+        # outputs, fed by a realistic Relu -> Transpose (NHWC->NCHW) head. Exercises the full
+        # optimizer pipeline (including the identity optimizer that can rename a producer's
+        # output to a graph-output name between transpose passes). The transpose is pushed
+        # past the Split; one compensating Transpose per branch survives (nothing downstream
+        # to fold into) and the result must stay numerically identical.
+        perm = [0, 3, 1, 2]                               # NHWC -> NCHW
+        input_shape = [2, 4, 6, 8]                        # NHWC
+        channels = input_shape[3]                         # split the channel axis
+        half = [input_shape[0], channels // 2, input_shape[1], input_shape[2]]  # NCHW half
+        node1 = helper.make_node("Relu", ["X"], ["R"], name="relu")
+        node2 = helper.make_node("Transpose", ["R"], ["Y"], perm=perm, name="trans")
+        if self.config.opset < 18:
+            node3 = helper.make_node("Split", ["Y"], ["res0", "res1"], axis=1, name="split")
+        else:
+            node3 = helper.make_node("Split", ["Y"], ["res0", "res1"], axis=1, name="split", num_outputs=2)
+        graph = helper.make_graph(
+            [node1, node2, node3],
+            "test_transpose_with_split_at_graph_tail",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, input_shape)],
+            [helper.make_tensor_value_info("res0", TensorProto.FLOAT, half),
+             helper.make_tensor_value_info("res1", TensorProto.FLOAT, half)],
+        )
+        model_proto = self.make_model(graph, producer_name="onnx-tests")
+        feed_dict = {"X": np.random.randn(*input_shape).astype(np.float32)}
+        self.run_transpose_compare(["res0", "res1"], feed_dict, model_proto, remaining_transpose_num=2)
+
+    @parameterized.expand([
         ((2, 3, 4), [2, 0, 1], [1, 2, 0]),
         ((2, 3, 4, 5), [0, 2, 3, 1], [0, 3, 1, 2]),
         ((2, 3, 4, 5, 6), [0, 2, 3, 4, 1], [0, 4, 1, 2, 3]),
