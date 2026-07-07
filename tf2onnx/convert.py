@@ -481,7 +481,8 @@ def from_keras(model, input_signature=None, opset=None, custom_ops=None, custom_
 
     Args:
         model: the tf.keras model we want to convert
-        input_signature: a tf.TensorSpec or a numpy array defining the shape/dtype of the input
+        input_signature: a list or tuple of tf.TensorSpec objects defining the shape/dtype
+            of each input, or None to infer it from model.inputs
         opset: the opset to be used for the ONNX model, default is the latest
         custom_ops: if a model contains ops not recognized by onnx runtime,
             you can tag these ops with a custom op domain so that the
@@ -568,7 +569,8 @@ def from_function(function, input_signature=None, opset=None, custom_ops=None, c
 
     Args:
         function: the tf.function we want to convert
-        input_signature: a tf.TensorSpec or a numpy array defining the shape/dtype of the input
+        input_signature: a list or tuple of tf.TensorSpec objects defining the shape/dtype
+            of each input
         opset: the opset to be used for the ONNX model, default is the latest
         custom_ops: if a model contains ops not recognized by onnx runtime,
             you can tag these ops with a custom op domain so that the
