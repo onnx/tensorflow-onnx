@@ -69,3 +69,29 @@ jobs:
         uses: EnricoMi/publish-unit-test-result-action@c950f6fb443cb5af20a377fd0dfaa78838901040 # v2.23.0
         with:
           files: "artifacts/**/*.xml"
+
+  tflite-op-coverage:
+    # Advisory guard that flags TFLite builtins with no @tfl_op handler
+    # (tests/test_tflite_op_coverage.py). It is deterministic (pure source
+    # introspection, no model conversion) and isolated from the test matrix, so
+    # it can only fail for a PR that actually changes the handled-op set - never
+    # for unrelated changes. `continue-on-error` keeps it non-blocking while it
+    # beds in; promote to a required check once the baseline is trusted.
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: '3.11'
+      - name: Install tf2onnx
+        run: |
+          python -m pip install --upgrade pip
+          pip install "numpy<2" onnx flatbuffers packaging parameterized pytest tensorflow==2.15.0
+          pip install -e .
+      - name: Run TFLite op coverage guard
+        env:
+          TF2ONNX_TFLITE_COVERAGE: '1'
+        run: python -m pytest tests/test_tflite_op_coverage.py -o addopts="" -v
