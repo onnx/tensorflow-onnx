@@ -75,6 +75,10 @@ jobs:
           # running the suite against them. Conversion opset is kept modest so the
           # produced models stay runnable under the paired ort; the point is to
           # exercise the onnx python API (build/checker/shape-inference/optimizer).
+          # NOTE: setup_test_env.sh pins numpy<2 while these onnx/ort wheels favour
+          # numpy 2.x, so a failure here may be a numpy-ABI mismatch rather than a
+          # real onnx-API regression - check the log before acting. These jobs are
+          # advisory (experimental) so such noise never blocks other PRs.
           - os: 'ubuntu-latest'
             tf_version: '2.15.0'
             python_version: '3.11'

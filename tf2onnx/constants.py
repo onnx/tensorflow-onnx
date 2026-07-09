@@ -58,7 +58,9 @@ ENV_TF2ONNX_CATCH_ERRORS = "TF2ONNX_CATCH_ERRORS"
 # The map is naturally capped by the installed onnx package's known opsets.
 # Refer to https://github.com/onnx/onnx/blob/main/docs/Versioning.md#released-versions
 OPSET_TO_IR_VERSION = {opset: ir_version for _, ir_version, opset, *_ in helper.VERSION_TABLE}
-# Historical override: opset 7 and opset 8 shipped with IR3, but tf2onnx emits
-# PlaceholderWithDefault which requires IR4. Keep the low-opset map explicit so
-# these workarounds survive regardless of what the release table reports.
+# Low-opset overrides for 1-8; this whole range must stay explicit because:
+#   * opsets 2, 3 and 4 have no row in VERSION_TABLE, so they are backfilled here
+#     (dropping them would make graph.py reject conversions at those opsets).
+#   * opsets 7 and 8 shipped with IR3, but tf2onnx emits PlaceholderWithDefault
+#     which requires IR4, so they are pinned to 4 rather than the table's value.
 OPSET_TO_IR_VERSION.update({1: 3, 2: 3, 3: 3, 4: 3, 5: 3, 6: 3, 7: 4, 8: 4})

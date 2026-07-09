@@ -306,12 +306,18 @@ class Tf2OnnxInternalTests(Tf2OnnxBackendTestBase):
             outputs=[helper.make_tensor_value_info("out:0", TensorProto.FLOAT, [2, 2])],
             initializer=[]
         )
+        tested = 0
         for opset in (19, 20, 21, 22):
             if opset > latest:
                 continue
             g = GraphUtil.create_graph_from_onnx_graph(graph_proto, opset_version=opset)
             model_proto = g.make_model("test")
             self.assertEqual(model_proto.ir_version, constants.OPSET_TO_IR_VERSION[opset])
+            tested += 1
+        # guard against a silent pass when the installed onnx is too old to know
+        # any of these opsets - the test would otherwise assert nothing.
+        if latest >= 19:
+            self.assertGreater(tested, 0)
 
 
 if __name__ == '__main__':
