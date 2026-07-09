@@ -52,8 +52,13 @@ ENV_TF2ONNX_DEBUG_MODE = "TF2ONNX_DEBUG_MODE"
 ENV_TF2ONNX_CATCH_ERRORS = "TF2ONNX_CATCH_ERRORS"
 
 # Mapping opset to IR version.
-# Note: opset 7 and opset 8 came out with IR3 but we need IR4 because of PlaceholderWithDefault
-# Refer from https://github.com/onnx/onnx/blob/main/docs/Versioning.md#released-versions
-OPSET_TO_IR_VERSION = {
-    1: 3, 2: 3, 3: 3, 4: 3, 5: 3, 6: 3, 7: 4, 8: 4, 9: 4, 10: 5, 11: 6, 12: 7, 13: 7, 14: 7, 15: 8, 16: 8, 17: 8, 18: 8
-}
+# Derived from the ONNX release table (helper.VERSION_TABLE rows are
+# (onnx_version, ir_version, opset, ai.onnx.ml, ai.onnx.training)) so that newer
+# ONNX releases are picked up automatically instead of hand-editing this map.
+# The map is naturally capped by the installed onnx package's known opsets.
+# Refer to https://github.com/onnx/onnx/blob/main/docs/Versioning.md#released-versions
+OPSET_TO_IR_VERSION = {opset: ir_version for _, ir_version, opset, *_ in helper.VERSION_TABLE}
+# Historical override: opset 7 and opset 8 shipped with IR3, but tf2onnx emits
+# PlaceholderWithDefault which requires IR4. Keep the low-opset map explicit so
+# these workarounds survive regardless of what the release table reports.
+OPSET_TO_IR_VERSION.update({1: 3, 2: 3, 3: 3, 4: 3, 5: 3, 6: 3, 7: 4, 8: 4})
