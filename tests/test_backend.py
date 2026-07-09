@@ -1428,8 +1428,8 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val1, _INPUT1: x_val2})
 
     def test_equal_string(self):
-        x_val1 = np.array(['1'], dtype=np.string_)
-        x_val2 = np.array(['2'], dtype=np.string_)
+        x_val1 = np.array(['1'], dtype=np.bytes_)
+        x_val2 = np.array(['2'], dtype=np.bytes_)
         def func(x1, x2):
             mi = tf.equal(x1, x2)
             return tf.identity(mi, name=_TFOUTPUT)
