@@ -18,8 +18,6 @@ skipped in the normal test matrix so it can never block unrelated PRs.
 import os
 import unittest
 
-import pytest
-
 # TFLite builtins that currently have NO ``@tfl_op`` handler. Emitting one of
 # these yields an invalid ``TFL_<NAME>`` passthrough node that no ONNX runtime
 # can load (e.g. TFL_GELU). Keep this list honest:
@@ -58,9 +56,12 @@ def _builtins_and_handled():
     return builtins, handled
 
 
-@pytest.mark.skipif(
-    not os.environ.get("TF2ONNX_TFLITE_COVERAGE"),
-    reason="TFLite coverage guard runs only in its dedicated non-blocking CI job",
+# unittest.skipUnless (not pytest.mark.skipif) so the guard is honored under both
+# runners -- `pytest` and a direct `python -m unittest` / `unittest.main()` via the
+# __main__ block below.
+@unittest.skipUnless(
+    os.environ.get("TF2ONNX_TFLITE_COVERAGE"),
+    "TFLite coverage guard runs only in its dedicated non-blocking CI job",
 )
 class TFLiteOpCoverageTests(unittest.TestCase):
 
