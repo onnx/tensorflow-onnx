@@ -314,7 +314,15 @@ class TransposeOptimizer(GraphOptimizerBase):
         return True
 
     # this is for the case where node has multiple outputs. e.g. split node.
+    # `trans` is rewired to consume node.output[0], so it must be the sole consumer of
+    # `trans`; otherwise any sibling consumer of `trans` would be silently repointed to
+    # the Split output. The only current caller (_split_handler) is reached via dispatch
+    # only when that already holds, so this guard is defensive -- it keeps the invariant
+    # for any future caller and mirrors the single-output _switch_transpose_and_node above.
     def _switch_transpose_and_node_with_multiple_outputs(self, node, trans, update_shape=True):
+        if not self._nodes_has_single_consumer_node([trans]):
+            return False
+
         input_index = self._get_input_index_for_trans(node, trans)
         for idx, _output in enumerate(node.output):
             shape = self._g.get_shape(_output)
@@ -708,19 +716,17 @@ class TransposeOptimizer(GraphOptimizerBase):
         # single-output path below.
         if len(node.output) > 1:
             # Multi-output: rewire the Transpose past each branch. This never touches the
-            # split sizes, so it is opset-agnostic. _switch_transpose_and_node_with_multiple_
-            # outputs rewires `trans` to consume a Split output, so if `trans` feeds anything
-            # other than this Split that rewrite would corrupt those consumers -- only proceed
-            # when `trans` is exclusively consumed here.
-            if not self._nodes_has_single_consumer_node([trans]):
-                return False
+            # split sizes, so it is opset-agnostic. The switch requires `trans` to be
+            # consumed only by this Split (it rewires `trans` onto a Split output); the
+            # helper guards that precondition and bails, so honour its return value.
             perm = trans.get_attr_value("perm")
             axis = node.get_attr_value("axis", 0)
             if axis < 0:
                 axis += get_transpose_rank(trans)
             # [Transpose -> Split -> next] -> [Split -> Transpose -> next]; the split sizes
             # stay the same, only the axis is relabelled to the pre-transpose layout.
-            self._switch_transpose_and_node_with_multiple_outputs(node, trans)
+            if not self._switch_transpose_and_node_with_multiple_outputs(node, trans):
+                return False
             node.set_attr("axis", perm[axis])
             return True
 

@@ -261,6 +261,51 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
         feed_dict = {"X": np.random.randn(*input_shape_with_trans).astype(np.float32)}
         self.run_transpose_compare(["res0", "res1"], feed_dict, model_proto, remaining_transpose_num=0)
 
+    def test_multi_output_switch_guards_shared_transpose(self):
+        # White-box guard test for _switch_transpose_and_node_with_multiple_outputs. The
+        # switch rewires `trans` onto a Split output, which is only safe when the Split is
+        # the transpose's sole consumer. Dispatch (_handle_nhwc_tranpose) only routes here
+        # when that already holds, so the guard cannot fire end-to-end; it protects any
+        # future caller that forgets the precondition (Copilot review on #2414) and mirrors
+        # the single-output _switch_transpose_and_node guard. Unlike a hand-mutated graph,
+        # this feeds a natural shape -- one Transpose feeding BOTH a multi-output Split and
+        # an independent Relu -- then calls the helper directly and asserts it bails
+        # (returns False) and leaves the graph untouched instead of repointing the sibling.
+        from tf2onnx.optimizer.transpose_optimizer import TransposeOptimizer
+        node1 = helper.make_node("Transpose", ["X"], ["Y"], perm=[0, 3, 1, 2], name="trans1")
+        if self.config.opset < 18:
+            split = helper.make_node("Split", ["Y"], ["Z0", "Z1"], axis=1, name="split")
+        else:
+            split = helper.make_node("Split", ["Y"], ["Z0", "Z1"], axis=1, name="split", num_outputs=2)
+        # Second, independent consumer of the SAME transpose output -> trans1 is shared.
+        relu = helper.make_node("Relu", ["Y"], ["R"], name="relu")
+        graph = helper.make_graph(
+            [node1, split, relu],
+            "test_multi_output_switch_guards_shared_transpose",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, [2, 4, 6, 8])],
+            [helper.make_tensor_value_info("Z0", TensorProto.FLOAT, [2, 4, 4, 6]),
+             helper.make_tensor_value_info("Z1", TensorProto.FLOAT, [2, 4, 4, 6]),
+             helper.make_tensor_value_info("R", TensorProto.FLOAT, [2, 8, 4, 6])],
+        )
+        g = GraphUtil.create_graph_from_onnx_model(self.make_model(graph, producer_name="onnx-tests"))
+        trans = g.get_node_by_name("trans1")
+        split_node = g.get_node_by_name("split")
+        opt = TransposeOptimizer()
+        opt._g = g  # pylint: disable=protected-access
+
+        before_axis = split_node.get_attr_value("axis")
+        before_split_input = list(split_node.input)
+        before_relu_input = list(g.get_node_by_name("relu").input)
+
+        # pylint: disable=protected-access
+        handled = opt._switch_transpose_and_node_with_multiple_outputs(split_node, trans)
+
+        self.assertFalse(handled, "the switch must bail when the transpose has more than one consumer")
+        self.assertEqual(split_node.get_attr_value("axis"), before_axis, "Split axis must be untouched")
+        self.assertEqual(list(split_node.input), before_split_input, "Split input wiring must be untouched")
+        self.assertEqual(list(g.get_node_by_name("relu").input), before_relu_input,
+                         "the sibling consumer of the shared transpose must be untouched")
+
     @parameterized.expand([
         ((2, 3, 4, 6), [0, 3, 1, 2], [0, 2, 3, 1]),
         ((2, 3, 4, 6, 8), [0, 4, 1, 2, 3], [0, 2, 3, 4, 1]),
