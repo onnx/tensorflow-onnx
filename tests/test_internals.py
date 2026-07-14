@@ -10,9 +10,9 @@ import numpy as np
 import tensorflow as tf
 from backend_test_base import Tf2OnnxBackendTestBase
 from common import unittest_main
-from onnx import TensorProto, helper, numpy_helper
+from onnx import TensorProto, defs, helper, numpy_helper
 
-from tf2onnx import tf_utils, utils
+from tf2onnx import constants, tf_utils, utils
 from tf2onnx.graph import GraphUtil
 from tf2onnx.graph_matcher import GraphMatcher, OpTypePattern
 from tf2onnx.tf_loader import tf_reset_default_graph, tf_session
@@ -281,6 +281,43 @@ class Tf2OnnxInternalTests(Tf2OnnxBackendTestBase):
             expected = tensors[name]
 
             self.assertTrue(np.array_equal(expected, actual))
+
+    def test_opset_to_ir_version_map(self):
+        # historical workaround must survive the release-table derivation:
+        # opset 7/8 shipped with IR3 but tf2onnx needs IR4 for PlaceholderWithDefault.
+        self.assertEqual(constants.OPSET_TO_IR_VERSION[7], 4)
+        self.assertEqual(constants.OPSET_TO_IR_VERSION[8], 4)
+        # every opset the installed onnx package knows about must be mapped.
+        self.assertIn(defs.onnx_opset_version(), constants.OPSET_TO_IR_VERSION)
+        # no regression for the previously hand-maintained entries.
+        legacy = {9: 4, 10: 5, 11: 6, 12: 7, 13: 7, 14: 7, 15: 8, 16: 8, 17: 8, 18: 8}
+        for opset, ir_version in legacy.items():
+            self.assertEqual(constants.OPSET_TO_IR_VERSION[opset], ir_version)
+
+    def test_ir_version_for_high_opsets(self):
+        # opset 19-22 used to fail with "Opset X is not supported yet"; make sure
+        # they now emit a model with the ir_version reported by the release table.
+        latest = defs.onnx_opset_version()
+        node = helper.make_node("Identity", ["input"], ["out:0"], name="n1")
+        graph_proto = helper.make_graph(
+            nodes=[node],
+            name="test",
+            inputs=[helper.make_tensor_value_info("input", TensorProto.FLOAT, [2, 2])],
+            outputs=[helper.make_tensor_value_info("out:0", TensorProto.FLOAT, [2, 2])],
+            initializer=[]
+        )
+        tested = 0
+        for opset in (19, 20, 21, 22):
+            if opset > latest:
+                continue
+            g = GraphUtil.create_graph_from_onnx_graph(graph_proto, opset_version=opset)
+            model_proto = g.make_model("test")
+            self.assertEqual(model_proto.ir_version, constants.OPSET_TO_IR_VERSION[opset])
+            tested += 1
+        # guard against a silent pass when the installed onnx is too old to know
+        # any of these opsets - the test would otherwise assert nothing.
+        if latest >= 19:
+            self.assertGreater(tested, 0)
 
 
 if __name__ == '__main__':
