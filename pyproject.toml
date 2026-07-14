@@ -19,7 +19,10 @@ dependencies = [
     "onnx>=1.14.0",
     "requests",
     "flatbuffers>=1.12",
-    "protobuf>=3.20",
+    # protobuf is intentionally not pinned here: it is a transitive dependency of
+    # onnx, tensorflow and onnxruntime, which already agree on a compatible range.
+    # Declaring our own floor only risks resolver conflicts (e.g. blocking newer
+    # TensorFlow that requires a different protobuf) without adding safety.
 ]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
