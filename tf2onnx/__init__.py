@@ -7,6 +7,8 @@ __all__ = ["utils", "graph_matcher", "graph", "graph_builder",
 
 import importlib
 
+from tf2onnx import protobuf_compat  # noqa: F401  # side-effect: shim google.protobuf.runtime_version
+
 import onnx
 
 from . import verbose_logging as logging
