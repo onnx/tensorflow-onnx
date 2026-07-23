@@ -102,7 +102,7 @@ class Node(object):
             return external_tensor_storage.node_to_modified_value_attr[self]
         if external_tensor_storage is None or a.type != AttributeProto.TENSOR:
             return a
-        if np.product(a.t.dims) > external_tensor_storage.external_tensor_size_threshold:
+        if np.prod(a.t.dims) > external_tensor_storage.external_tensor_size_threshold:
             a = copy.deepcopy(a)
             tensor_name = self.name.strip() + "_" + str(external_tensor_storage.name_counter)
             for c in '~"#%&*:<>?/\\{|}':
