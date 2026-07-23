@@ -8,7 +8,7 @@ Use tf2onnx.keras2onnx_api.convert_keras instead of deprecated keras2onnx.conver
 # pylint: disable=unused-argument,missing-docstring
 
 import tensorflow as tf
-from onnx import defs, mapping
+from onnx import defs, helper
 
 import tf2onnx
 from tf2onnx.constants import OPSET_TO_IR_VERSION
@@ -16,7 +16,9 @@ from tf2onnx.constants import OPSET_TO_IR_VERSION
 
 def to_tf_tensor_spec(onnx_type, name=None, unknown_dim=1):
     shp = [unknown_dim if isinstance(n_, str) else n_ for n_ in onnx_type.shape]
-    return tf.TensorSpec(shp, mapping.TENSOR_TYPE_TO_NP_TYPE[onnx_type.to_onnx_type().tensor_type.elem_type],
+    # onnx.mapping (incl. TENSOR_TYPE_TO_NP_TYPE) was removed in onnx 1.19; use
+    # the helper function instead so tf2onnx works on modern onnx releases.
+    return tf.TensorSpec(shp, helper.tensor_dtype_to_np_dtype(onnx_type.to_onnx_type().tensor_type.elem_type),
                          name=name)
 
 def _process_initial_types(initial_types, unknown_dim=1):

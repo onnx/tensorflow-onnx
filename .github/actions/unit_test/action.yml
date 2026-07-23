@@ -14,6 +14,9 @@ inputs:
     description: 'OPSET version'
   skip_tflite:
     description: 'Skip TFLite tests'
+  numpy_spec:
+    description: 'pip requirement spec for numpy (e.g. "numpy<2" or "numpy>=2")'
+    default: 'numpy<2'
 
 runs:
   using: "composite"
@@ -29,9 +32,10 @@ runs:
         TF_VERSION: ${{ inputs.tf_version }}
         ORT_VERSION: ${{ inputs.ort_version }}
         ONNX_VERSION: ${{ inputs.onnx_version }}
+        NUMPY_SPEC: ${{ inputs.numpy_spec }}
       run: |
         chmod +x ./tests/utils/setup_test_env.sh
-        ./tests/utils/setup_test_env.sh "$TF_VERSION" "$ORT_VERSION" "$ONNX_VERSION"
+        ./tests/utils/setup_test_env.sh "$TF_VERSION" "$ORT_VERSION" "$ONNX_VERSION" "$NUMPY_SPEC"
 
     - name: Fix Paths (Windows only)
       shell: pwsh
