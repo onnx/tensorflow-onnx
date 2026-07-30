@@ -72,3 +72,44 @@ class TFListUtilsTests(Tf2OnnxBackendTestBase):
             self.assertEqual(dtype, dtypes[name])
 
         self.assertTrue(len(onnx_nodes) >= 4)
+
+    @check_tf_min_version("2.0")
+    def test_parse_tflite_graph_op_without_outputs(self):
+        # Ops such as ASSIGN_VARIABLE have no outputs at all, so their node name
+        # cannot be derived from the first output tensor.
+
+        class VariableModule(tf.Module):
+            def __init__(self):
+                super().__init__()
+                self.v = tf.Variable([0.0, 0.0], dtype=tf.float32)
+
+            @tf.function(input_signature=[tf.TensorSpec([2], tf.float32, name="input")])
+            def __call__(self, x):
+                self.v.assign(x)
+                return tf.identity(self.v + 1.0, name="output")
+
+        module = VariableModule()
+        concrete_func = module.__call__.get_concrete_function()
+        converter = tf.lite.TFLiteConverter.from_concrete_functions([concrete_func], module)
+        converter.experimental_enable_resource_variables = True
+        tflite_model = converter.convert()
+
+        tflite_path = os.path.join(self.test_data_directory, self._testMethodName + ".tflite")
+        os.makedirs(os.path.dirname(tflite_path), exist_ok=True)
+        with open(tflite_path, 'wb') as f:
+            f.write(tflite_model)
+
+        tflite_graphs, opcodes_map, model, tensor_shapes = read_tflite_model(tflite_path)
+        nodes_without_outputs = []
+        for tflite_graph in tflite_graphs:
+            onnx_nodes = parse_tflite_graph(tflite_graph, opcodes_map, model,
+                                            tensor_shapes_override=tensor_shapes)[0]
+            names = [node.name for node in onnx_nodes]
+            self.assertEqual(len(names), len(set(names)))
+            for node in onnx_nodes:
+                self.assertTrue(node.name)
+                if len(node.output) == 0:
+                    nodes_without_outputs.append(node)
+
+        # The model must exercise the op-without-outputs path for this test to mean anything.
+        self.assertTrue(len(nodes_without_outputs) > 0)
