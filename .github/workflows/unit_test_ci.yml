@@ -133,3 +133,34 @@ jobs:
         uses: EnricoMi/publish-unit-test-result-action@d0a4676d0e0b938bc201470d88276b7c74c712b3 # v2.24.0
         with:
           files: "artifacts/**/*.xml"
+
+  tflite-op-coverage:
+    # Advisory guard that flags TFLite builtins with no @tfl_op handler
+    # (tests/test_tflite_op_coverage.py). It is deterministic (pure source
+    # introspection, no model conversion) and isolated from the test matrix, so
+    # it can only fail for a PR that actually changes the handled-op set - never
+    # for unrelated changes. `continue-on-error` keeps it non-blocking while it
+    # beds in; promote to a required check once the baseline is trusted.
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: '3.11'
+      - name: Install tf2onnx
+        run: |
+          python -m pip install --upgrade pip
+          # tensorflow and onnxruntime are required even though this test never
+          # runs a model: tf2onnx imports tensorflow unconditionally at package
+          # init (verbose_logging), and tests/conftest.py pulls in onnxruntime
+          # via TestConfig._get_backend_version(), so the guard cannot collect
+          # without either. Versions are pinned to keep the job deterministic.
+          pip install "numpy<2" onnx==1.16.1 onnxruntime==1.16.3 flatbuffers packaging parameterized pytest tensorflow==2.15.0
+          pip install -e .
+      - name: Run TFLite op coverage guard
+        env:
+          TF2ONNX_TFLITE_COVERAGE: '1'
+        run: python -m pytest tests/test_tflite_op_coverage.py -o addopts="" -v
