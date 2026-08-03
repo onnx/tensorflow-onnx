@@ -153,11 +153,12 @@ jobs:
       - name: Install tf2onnx
         run: |
           python -m pip install --upgrade pip
-          # tensorflow is required even though this test never runs a model:
-          # tf2onnx imports it unconditionally at package init (verbose_logging),
-          # and tests/conftest.py imports it too, so the guard cannot collect without
-          # it. onnx is pinned to keep the job deterministic.
-          pip install "numpy<2" onnx==1.16.1 flatbuffers packaging parameterized pytest tensorflow==2.15.0
+          # tensorflow and onnxruntime are required even though this test never
+          # runs a model: tf2onnx imports tensorflow unconditionally at package
+          # init (verbose_logging), and tests/conftest.py pulls in onnxruntime
+          # via TestConfig._get_backend_version(), so the guard cannot collect
+          # without either. Versions are pinned to keep the job deterministic.
+          pip install "numpy<2" onnx==1.16.1 onnxruntime==1.16.3 flatbuffers packaging parameterized pytest tensorflow==2.15.0
           pip install -e .
       - name: Run TFLite op coverage guard
         env:
