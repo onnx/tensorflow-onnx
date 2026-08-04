@@ -29,6 +29,9 @@ class LatestPrereleaseTest(unittest.TestCase):
 
         self.assertEqual(latest_prerelease(releases), "")
 
+    def test_returns_empty_when_no_releases_exist(self):
+        self.assertEqual(latest_prerelease({}), "")
+
 
 if __name__ == "__main__":
     unittest.main()
