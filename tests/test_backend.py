@@ -306,6 +306,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     @skip_caffe2_backend()
     @check_opset_min_version(7, "multinomial")
+    @check_opset_max_version(21, "onnxruntime has no Multinomial kernel for opset 22 (NOT_IMPLEMENTED)")
     def test_multinomial(self):
         x_val = np.array([[10., 10.]], dtype=np.float32)
         def func(x):
@@ -319,6 +320,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     @skip_caffe2_backend()
     @check_opset_min_version(7, "multinomial")
+    @check_opset_max_version(21, "onnxruntime has no Multinomial kernel for opset 22 (NOT_IMPLEMENTED)")
     def test_multinomial1(self):
         shape = [2, 10]
         x_val = np.ones(np.prod(shape)).astype("float32").reshape(shape)
@@ -726,6 +728,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
                             graph_validator=lambda g: (check_op_count(g, "RandomUniform", 0) and
                                                        check_op_count(g, "RandomUniformLike", 0)))
 
+    @check_opset_max_version(21, "onnxruntime has no RandomUniform kernel for opset 22 (NOT_IMPLEMENTED)")
     def test_nn_dropout(self):
         x_val = np.ones([1, 24, 24, 3], dtype=np.float32)
         # Define a scope for reusing the variables
@@ -741,6 +744,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
                                                        check_op_count(g, "RandomUniformLike", 0)))
 
     @check_tf_min_version("1.13")
+    @check_opset_max_version(21, "onnxruntime has no RandomUniform kernel for opset 22 (NOT_IMPLEMENTED)")
     def test_nn_dropout_with_rate(self):
         rate = tf.constant(0., name="rate")
         x_val = np.ones([1, 24, 24, 3], dtype=np.float32)
@@ -2266,6 +2270,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val})
 
     @skip_caffe2_backend()
+    @check_opset_max_version(21, "onnxruntime has no RandomUniform kernel for opset 22 (NOT_IMPLEMENTED)")
     def test_randomuniform(self):
         def func():
             shape = tf.constant([2, 3], name="shape")
@@ -2276,6 +2281,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         # since results are random, compare the shapes only
         self._run_test_case(func, [_OUTPUT], {}, check_value=False, check_shape=True)
 
+    @check_opset_max_version(21, "onnxruntime has no RandomNormal kernel for opset 22 (NOT_IMPLEMENTED)")
     def test_random_std_normal(self):
         def func():
             shape = tf.constant([20, 10, 50], name="shape")
@@ -2287,6 +2293,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self.assertTrue(-0.1 < np.mean(results) < 0.1)
         self.assertTrue(0.9 < np.std(results) < 1.1)
 
+    @check_opset_max_version(21, "onnxruntime has no RandomNormal kernel for opset 22 (NOT_IMPLEMENTED)")
     def test_randomnormal(self):
         def func():
             shape = tf.constant([20, 10, 50], name="shape")
@@ -2299,6 +2306,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self.assertTrue(1.9 < np.std(results) < 2.1)
 
     @check_opset_min_version(9, "RandomNormalLike")
+    @check_opset_max_version(21, "onnxruntime has no RandomNormalLike kernel for opset 22 (NOT_IMPLEMENTED)")
     def test_randomnormal_unknown_shape(self):
         shape_val = np.array([20, 10, 50], np.int32)
         def func(shape):
@@ -2315,6 +2323,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self.assertTrue(0.9 < np.std(results) < 1.1)
 
     @check_opset_min_version(10, "TopK")
+    @check_opset_max_version(21, "onnxruntime has no RandomUniformLike kernel for opset 22 (NOT_IMPLEMENTED)")
     def test_random_shuffle(self):
         x_val = make_xval([5, 4, 3])
         def func(x):
@@ -2329,6 +2338,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         results = self.run_backend(g, g.outputs, feed_dict)
         np.testing.assert_allclose(x_val, np.sort(results[0], axis=0))
 
+    @check_opset_max_version(21, "onnxruntime has no RandomUniform kernel for opset 22 (NOT_IMPLEMENTED)")
     def test_randomuniform_int(self):
         def func():
             shape = tf.constant([100, 3], name="shape")
@@ -2342,6 +2352,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         numbers = set(results[0].flatten())
         self.assertEqual(sorted(numbers), list(range(2, 10)))
 
+    @check_opset_max_version(21, "onnxruntime has no RandomUniform kernel for opset 22 (NOT_IMPLEMENTED)")
     def test_randomuniform_int_scalar(self):
         def func():
             shape = tf.constant(np.array([], np.int32), name="shape")
@@ -2354,6 +2365,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         results = self.run_backend(g, g.outputs, {})
         self.assertTrue(2 <= results[0] < 10)
 
+    @check_opset_max_version(21, "onnxruntime has no RandomUniform kernel for opset 22 (NOT_IMPLEMENTED)")
     def test_randomuniform_int_nonconst_max(self):
         m_val = np.array(8, dtype=np.int32)
         def func(m):
@@ -2371,6 +2383,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         numbers = set(results[0].flatten())
         self.assertEqual(sorted(numbers), list(range(8)))
 
+    @check_opset_max_version(21, "onnxruntime has no RandomUniform kernel for opset 22 (NOT_IMPLEMENTED)")
     def test_randomuniform_int_nonconst_min_max(self):
         n_val = np.array(2, dtype=np.int32)
         m_val = np.array(10, dtype=np.int32)
@@ -2390,6 +2403,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self.assertEqual(sorted(numbers), list(range(2, 10)))
 
     @check_opset_min_version(9, "RandomUniformLike")
+    @check_opset_max_version(21, "onnxruntime has no RandomUniformLike kernel for opset 22 (NOT_IMPLEMENTED)")
     def test_randomuniform_int_nonconst_min_max_shape(self):
         n_val = np.array(2, dtype=np.int32)
         m_val = np.array(10, dtype=np.int32)
@@ -2411,6 +2425,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     @skip_caffe2_backend()
     @check_opset_after_tf_version("2.2", 9, "RandomUniform")
+    @check_opset_max_version(21, "onnxruntime has no RandomUniform kernel for opset 22 (NOT_IMPLEMENTED)")
     def test_randomuniform_dyn_shape(self):
         # test for dynamic shape coming from a shape op
         x_val = np.array([0, 1, 2, 3, 5], dtype=np.int64)
@@ -2421,6 +2436,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, check_value=False, check_shape=True)
 
     @skip_caffe2_backend()
+    @check_opset_max_version(21, "onnxruntime has no RandomUniform kernel for opset 22 (NOT_IMPLEMENTED)")
     def test_randomuniform_calc_shape(self):
         # test for dynamic shape coming from some subgraph
         x_val = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]], dtype=np.float32)
@@ -2435,6 +2451,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     @check_opset_min_version(9, "Compress")
     @skip_onnx_checker("Checker fails type inference for Compress")
+    @check_opset_max_version(21, "onnxruntime has no RandomUniform kernel for opset 22 (NOT_IMPLEMENTED)")
     def test_sample_distorted_bounding_box_v2(self):
         x_val = np.array([200, 300, 3], dtype=np.int32)
         y_val = np.random.uniform(size=[1, 1000, 4]).astype(np.float32)
