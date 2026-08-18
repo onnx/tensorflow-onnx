@@ -23,11 +23,19 @@ echo "==== ONNXRuntime version: $ORT_VERSION"
 echo "==== ONNX version: $ONNX_VERSION"
 echo "==== numpy spec: $NUMPY_SPEC"
 
-pip install "$NUMPY_SPEC" onnx==$ONNX_VERSION onnxruntime==$ORT_VERSION onnxruntime-extensions
-pip install pytest pytest-cov pytest-runner coverage graphviz requests pyyaml pillow pandas parameterized sympy coloredlogs flatbuffers timeout-decorator
-pip install tensorflow==$TF_VERSION
+# Pin ml_dtypes explicitly: onnx pulls it in transitively via "ml_dtypes>=0.5.0",
+# and its latest release (0.6.0) hard-requires numpy>=2.0, which silently
+# overrides NUMPY_SPEC during resolution. ml_dtypes<0.6.0 still satisfies onnx's
+# constraint and stays numpy<2-compatible.
+pip install "$NUMPY_SPEC" "ml_dtypes<0.6.0" onnx==$ONNX_VERSION onnxruntime==$ORT_VERSION onnxruntime-extensions
+# Re-assert NUMPY_SPEC on every subsequent install: each `pip install` is an
+# independent resolution, so an unpinned transitive numpy requirement in any
+# later package (tensorflow, pandas, tf2onnx itself, ...) can silently
+# upgrade numpy past what the first command settled on.
+pip install "$NUMPY_SPEC" pytest pytest-cov pytest-runner coverage graphviz requests pyyaml pillow pandas parameterized sympy coloredlogs flatbuffers timeout-decorator
+pip install "$NUMPY_SPEC" tensorflow==$TF_VERSION
 
-pip install -e .
+pip install "$NUMPY_SPEC" -e .
 
 echo "----- List all of depdencies:"
 pip freeze --all
