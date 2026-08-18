@@ -3187,9 +3187,11 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     @check_tf_min_version("1.15")
     @check_opset_min_version(10, "quantize_and_dequantize")
-    @check_opset_max_version(20, "onnxruntime's CPU EP has no QLinearMatMul kernel for opset 21+ "
-                                  "(NOT_IMPLEMENTED: Version mismatch), even though opset 21 model "
-                                  "loading itself is supported")
+    @unittest.skipIf(get_test_config().is_onnxruntime_backend and get_test_config().opset >= 21
+                     and get_test_config().backend_version < Version("1.28.0"),
+                     "onnxruntime's CPU EP has no QLinearMatMul kernel for opset 21+ before 1.28.0 "
+                     "(NOT_IMPLEMENTED: Version mismatch), even though opset 21+ model loading itself "
+                     "is supported")
     def test_qdq_optimizer_split_concat(self):
         x_shape = [7, 3, 5]
         y_shape = [7, 2, 5]
