@@ -46,7 +46,7 @@ class ApiTests(Tf2OnnxBackendTestBase):
         n = np.array([2.], dtype=np.float32)
         ky = model.predict([x, n])
         spec = (tf.TensorSpec((None, 224, 224, 3), tf.float32, name="input"),
-                tf.TensorSpec((), tf.float32, name="n"))
+                tf.TensorSpec((None,), tf.float32, name="n"))
         if large_model:
             output_path = os.path.join(self.test_data_directory, "model.zip")
         else:
@@ -71,6 +71,24 @@ class ApiTests(Tf2OnnxBackendTestBase):
     @check_tf_min_version("1.15")
     def test_keras_api(self):
         self._test_keras_api(large_model=False)
+
+    @check_tf_min_version("2.16")
+    def test_keras3_output_name_mapping(self):
+        model = tf.keras.Sequential([
+            tf.keras.layers.Input(shape=(4,), name="features"),
+            tf.keras.layers.Dense(3, activation="relu"),
+            tf.keras.layers.Dense(2, name="scores"),
+        ])
+        model(np.zeros((1, 4), dtype=np.float32))
+        model_path = os.path.join(self.test_data_directory, "model.keras")
+        model.save(model_path)
+        model = tf.keras.models.load_model(model_path)
+        spec = (tf.TensorSpec((None, 4), tf.float32, name="features"),)
+
+        model_proto, _ = tf2onnx.convert.from_keras(
+            model, input_signature=spec, opset=self.config.opset)
+
+        self.assertEqual([output.name for output in model_proto.graph.output], ["scores"])
 
     @check_tf_min_version("1.15")
     @skip_tf_versions(["2.0", "2.1"], "TF 2 requires 2.2 for large model freezing")
