@@ -1,3 +1,7 @@
+# Copyright (c) ONNX Project Contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 name: Keras Unit Test
 
 on:
@@ -17,8 +21,6 @@ jobs:
 
   test:
     timeout-minutes: 60
-    permissions:
-      actions: write
     strategy:
       fail-fast: false
       matrix:

@@ -1,3 +1,7 @@
+# Copyright (c) ONNX Project Contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 name: Pretrained Model Test
 
 on:
@@ -17,8 +21,6 @@ jobs:
 
   test:
     timeout-minutes: 90
-    permissions:
-      actions: write
     strategy:
       fail-fast: false
       matrix:
