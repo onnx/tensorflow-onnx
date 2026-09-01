@@ -77,6 +77,31 @@ class ApiTests(Tf2OnnxBackendTestBase):
     def test_keras_api_large(self):
         self._test_keras_api(large_model=True)
 
+    @check_tf_min_version("2.10")
+    def test_keras_api_loaded_from_file(self):
+        # Regression test for https://github.com/onnx/tensorflow-onnx/issues/2448
+        model = tf.keras.Sequential([
+            tf.keras.layers.Input(shape=(10,), name="input"),
+            tf.keras.layers.Dense(5, activation="softmax"),
+        ])
+        model.compile(optimizer="adam", loss="sparse_categorical_crossentropy")
+
+        x = np.arange(20).reshape([2, 10]).astype(np.float32)
+        ky = model.predict(x)
+
+        keras_path = os.path.join(self.test_data_directory, "model.keras")
+        model.save(keras_path)
+        loaded = tf.keras.models.load_model(keras_path)
+
+        spec = (tf.TensorSpec((None, 10), tf.float32, name="input"),)
+        output_path = os.path.join(self.test_data_directory, "model.onnx")
+        model_proto, _ = tf2onnx.convert.from_keras(
+            loaded, input_signature=spec, opset=self.config.opset, output_path=output_path)
+
+        output_names = [n.name for n in model_proto.graph.output]
+        oy = self.run_onnxruntime(output_path, {"input": x}, output_names)
+        self.assertAllClose(ky, oy[0], rtol=0.3, atol=0.1)
+
     @requires_custom_ops()
     @check_tf_min_version("1.15")
     @check_opset_min_version(11, "SparseToDense")
