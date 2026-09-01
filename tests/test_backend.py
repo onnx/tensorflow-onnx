@@ -3156,6 +3156,19 @@ class BackendTests(Tf2OnnxBackendTestBase):
 
     @check_tf_min_version("1.15")
     @check_opset_min_version(10, "quantize_and_dequantize")
+    def test_qdq_signed_input_narrow_range(self):
+        x_shape = [3, 3, 2]
+        x_val = np.arange(-np.prod(x_shape)/2, np.prod(x_shape)/2).astype("float32").reshape(x_shape)
+        min_x = np.min(x_val)
+        max_x = np.max(x_val)
+        def func(x):
+            x_ = quantize_and_dequantize(x, min_x, max_x, signed_input=True, narrow_range=True, range_given=True)
+            return tf.identity(x_, name=_TFOUTPUT)
+        _ = self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
+
+    @check_tf_min_version("1.15")
+    @check_opset_min_version(10, "quantize_and_dequantize")
     def test_qdq_optimizer(self):
         x_shape = [3, 3, 2]
         x_val = np.arange(1, 1+np.prod(x_shape)).astype("float32").reshape(x_shape)
