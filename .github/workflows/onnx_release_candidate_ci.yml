@@ -1,0 +1,77 @@
+# Copyright (c) ONNX Project Contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+name: ONNX Release Candidate
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/onnx_release_candidate_ci.yml"
+      - ".github/actions/unit_test/action.yml"
+      - "tools/latest_pypi_prerelease.py"
+      - "tools/test_latest_pypi_prerelease.py"
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-onnx-release-candidate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.11"
+
+      - name: Test prerelease resolver
+        run: |
+          python -m pip install packaging
+          python -m unittest tools/test_latest_pypi_prerelease.py
+
+      - name: Resolve latest ONNX release candidate
+        id: onnx
+        shell: bash
+        run: |
+          metadata="${RUNNER_TEMP}/onnx-pypi.json"
+          curl --fail --retry 3 --retry-all-errors --retry-delay 2 \
+            --silent --show-error https://pypi.org/pypi/onnx/json \
+            --output "${metadata}"
+          version="$(python tools/latest_pypi_prerelease.py "${metadata}")"
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+          if [[ -n "${version}" ]]; then
+            echo "Testing ONNX ${version}" >> "${GITHUB_STEP_SUMMARY}"
+          else
+            echo "No ONNX release candidate newer than the latest stable release." >> "${GITHUB_STEP_SUMMARY}"
+          fi
+
+      - name: Run unit tests against ONNX release candidate
+        if: steps.onnx.outputs.version != ''
+        uses: ./.github/actions/unit_test
+        with:
+          tf_version: "2.15.0"
+          python_version: "3.11"
+          ort_version: "1.20.1"
+          onnx_version: ${{ steps.onnx.outputs.version }}
+          opset_version: "18"
+          skip_tflite: "False"
+
+      - name: Upload test results
+        if: always() && steps.onnx.outputs.version != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ONNX RC Test Results (${{ steps.onnx.outputs.version }})
+          path: junit/test-results.xml
