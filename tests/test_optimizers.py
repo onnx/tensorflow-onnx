@@ -1151,9 +1151,12 @@ class OptimizerTests(Tf2OnnxBackendTestBase):
             node4 = helper.make_node("Identity", ["loop_condition"], ["loop_cond_output"])
             node5 = helper.make_node("Identity", ["loop_condition"], ["loop_carried_output"])
 
-            nodes = [node1, node2, node3, node4, node5]
+            nodes = [node1, node2]
             if const_node is not None:
+                # must precede node3, which consumes it as "axes_const": newer onnxruntime
+                # versions enforce topological node order within subgraphs strictly.
                 nodes.append(const_node)
+            nodes.extend([node3, node4, node5])
 
             graph = helper.make_graph(
                 nodes,
