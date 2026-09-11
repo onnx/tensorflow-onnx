@@ -527,7 +527,10 @@ def from_keras(model, input_signature=None, opset=None, custom_ops=None, custom_
     model_out_names = _get_output_names(model)
     if model_out_names:
         # model output_names is an optional field of Keras models indicating output order.
-        output_names = [reverse_lookup[out] for out in model_out_names]
+        # Some Keras versions generate names that do not appear in the concrete function's
+        # structured outputs; fall back to the concrete function output names in that case.
+        if all(out in reverse_lookup for out in model_out_names):
+            output_names = [reverse_lookup[out] for out in model_out_names]
     elif isinstance(concrete_func.structured_outputs, dict):
         # Other models specify output order using the key order of structured_outputs
         output_names = [reverse_lookup[out] for out in concrete_func.structured_outputs.keys()]
