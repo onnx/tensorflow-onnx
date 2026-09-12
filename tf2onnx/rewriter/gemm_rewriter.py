@@ -4,11 +4,12 @@
 """
 tf2onnx.rewrite - rewrite tensorflow subgraph to onnx gemm op
 """
-import logging
 
 from onnx import onnx_pb
 
 from tf2onnx.graph_matcher import GraphMatcher, OpTypePattern
+
+_GEMM_SUPPORTED_DTYPES = {onnx_pb.TensorProto.FLOAT, onnx_pb.TensorProto.DOUBLE}
 
 # pylint: disable=missing-docstring
 
@@ -72,8 +73,10 @@ def rewrite_gemm(g, ops):
             for match in match_results:
                 matmul_node = match.get_op("matmul")
 
-                if g.get_dtype(matmul_node.input[0]) != onnx_pb.TensorProto.FLOAT:
-                    logging.warning(u"For now, onnxruntime only support float32 type for Gemm rewriter")
+                # ONNX Gemm's type constraint T allows float16/float/double and
+                # onnxruntime implements the float and double kernels, so fuse
+                # both float32 and float64 (double) MatMul+Add patterns.
+                if g.get_dtype(matmul_node.input[0]) not in _GEMM_SUPPORTED_DTYPES:
                     continue
 
                 attr, is_valid = get_gemm_attr(match)

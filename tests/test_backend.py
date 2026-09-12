@@ -4715,6 +4715,27 @@ class BackendTests(Tf2OnnxBackendTestBase):
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val1, _INPUT1: x_val2, _INPUT2: x_val3},
                             graph_validator=lambda g: check_op_count(g, "Gemm", 1))
 
+    def test_gemm_pattern0_double(self):
+        # float64 (double) MatMul+Add must fuse into Gemm too: ONNX Gemm allows
+        # double and onnxruntime implements the kernel. disabled=False so the
+        # validator actually asserts the fusion happened.
+        max_number = 10
+        m = np.random.randint(max_number)
+        n = np.random.randint(max_number)
+        k = np.random.randint(max_number)
+        x_val1 = np.random.rand(m, n).astype("float64")
+        x_val2 = np.random.rand(n, k).astype("float64")
+        x_val3 = np.random.rand(m, k).astype("float64")
+        def func(a, b, c):
+            alpha = tf.constant(1.0, dtype=tf.float64)
+            beta = tf.constant(2.0, dtype=tf.float64)
+            mul1 = tf.multiply(alpha, tf.matmul(a, b))
+            mul2 = tf.multiply(beta, c)
+            x_ = mul1 + mul2
+            return tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val1, _INPUT1: x_val2, _INPUT2: x_val3},
+                            graph_validator=lambda g: check_op_count(g, "Gemm", 1, disabled=False))
+
     # test for gemm pattern1: alpha*A*B + C
     def test_gemm_pattern1(self):
         max_number = 10
