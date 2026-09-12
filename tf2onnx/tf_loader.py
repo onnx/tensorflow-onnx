@@ -483,6 +483,8 @@ def from_checkpoint(model_path, input_names, output_names):
             # restore from model_path minus the ".meta"
             saver.restore(sess, model_path[:-5])
             input_names = inputs_without_resource(sess, input_names)
+            # TF graph freezing requires node names (without the :0 port)
+            output_node_names = [n.split(":")[0] for n in output_names]
             frozen_graph = freeze_session(sess, input_names=input_names, output_names=output_names)
             input_names = remove_redundant_inputs(frozen_graph, input_names)
 
