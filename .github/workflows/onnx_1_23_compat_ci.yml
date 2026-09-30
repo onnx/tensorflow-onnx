@@ -41,9 +41,21 @@ jobs:
       - name: Exercise ONNX APIs used by tf2onnx
         run: |
           python - <<'PY'
+          import importlib.util
+          from pathlib import Path
+
           import numpy as np
           from onnx import TensorProto, checker, defs, helper, numpy_helper, shape_inference
-          from tf2onnx import constants
+
+          # Load the real constants module directly from its source file so this
+          # package-API lane stays independent from TensorFlow. Importing the
+          # tf2onnx package normally executes verbose_logging.py, which imports
+          # TensorFlow before any ONNX compatibility code is reached.
+          constants_path = Path("tf2onnx/constants.py")
+          spec = importlib.util.spec_from_file_location("tf2onnx_constants_smoke", constants_path)
+          assert spec is not None and spec.loader is not None
+          constants = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(constants)
 
           latest_opset = defs.onnx_opset_version()
           assert latest_opset in constants.OPSET_TO_IR_VERSION, (
