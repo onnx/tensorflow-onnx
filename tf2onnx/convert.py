@@ -37,9 +37,16 @@ def _get_output_names(model):
     """Get output names from a Keras model, compatible with old and new Keras."""
     if hasattr(model, 'output_names'):
         return model.output_names
-    # Keras in TF 2.12+ removed output_names; derive from output layers
+    # Keras 3 removed output_names. Prefer the operation that produced each
+    # symbolic output: the tensor name itself is only an internal keras_tensor_N
+    # identifier and does not match the traced concrete function.
     try:
-        return [output.name.split('/')[0] for output in model.outputs]
+        names = []
+        for output in model.outputs:
+            history = getattr(output, '_keras_history', None)
+            operation = getattr(history, 'operation', None)
+            names.append(getattr(operation, 'name', None) or output.name.split('/')[0])
+        return names
     except (AttributeError, IndexError):
         return None
 
@@ -527,7 +534,14 @@ def from_keras(model, input_signature=None, opset=None, custom_ops=None, custom_
     model_out_names = _get_output_names(model)
     if model_out_names:
         # model output_names is an optional field of Keras models indicating output order.
-        output_names = [reverse_lookup[out] for out in model_out_names]
+        if all(out in reverse_lookup for out in model_out_names):
+            output_names = [reverse_lookup[out] for out in model_out_names]
+        elif len(model_out_names) == len(output_names):
+            # Keras 3 returns symbolic keras_tensor_N model outputs while the
+            # traced function exposes Identity tensors. Their order is stable,
+            # so retain the traced output tensors and give them the model's
+            # public output names instead of looking them up by symbolic name.
+            tensors_to_rename.update(zip(output_names, model_out_names))
     elif isinstance(concrete_func.structured_outputs, dict):
         # Other models specify output order using the key order of structured_outputs
         output_names = [reverse_lookup[out] for out in concrete_func.structured_outputs.keys()]
