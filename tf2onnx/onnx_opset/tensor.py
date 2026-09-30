@@ -1409,7 +1409,17 @@ class OneHot:
             cls.version_1(ctx, node, **kwargs)
             return
 
-        depth = GraphBuilder(ctx).make_unsqueeze({'data': node.input[1], 'axes': [0]})
+        depth_node = node.inputs[1]
+        if depth_node.is_const():
+            # Fold the unsqueeze immediately instead of emitting an Unsqueeze node: if left as a
+            # live node, this input isn't a const by the time update_node_shape_dtype runs below,
+            # so onnx's OneHot shape inference can't resolve the depth dim from it (stays -1) even
+            # though a later constant-fold pass turns it into an initializer anyway. Folding here
+            # keeps tf2onnx's own shape tracking in sync with what onnx infers for the final model.
+            depth_val = np.expand_dims(depth_node.get_tensor_value(as_list=False), axis=0)
+            depth = ctx.make_const(utils.make_name(depth_node.name + "_unsqueeze"), depth_val).output[0]
+        else:
+            depth = GraphBuilder(ctx).make_unsqueeze({'data': node.input[1], 'axes': [0]})
         on_value = node.input[2]
         off_value = node.input[3]
         on_value = GraphBuilder(ctx).make_unsqueeze({'data': on_value, 'axes': [0]})
