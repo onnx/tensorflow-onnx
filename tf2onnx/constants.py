@@ -70,7 +70,9 @@ OPSET_TO_IR_VERSION.update({1: 3, 2: 3, 3: 3, 4: 3, 5: 3, 6: 3, 7: 4, 8: 4})
 # gains a row for it at release time. Backfill those with the package's
 # current IR version so tf2onnx keeps working against such (pre-release) onnx
 # builds instead of rejecting an opset the installed package actually knows.
-_max_known_opset = max(OPSET_TO_IR_VERSION)
+# MAX_RELEASED_OPSET keeps the pre-backfill maximum so defaults never pick an
+# unreleased opset; the backfilled entries only serve an explicitly requested one.
+MAX_RELEASED_OPSET = max(OPSET_TO_IR_VERSION)
 _current_opset = defs.onnx_opset_version()
-if _current_opset > _max_known_opset:
-    OPSET_TO_IR_VERSION.update({op: onnx.IR_VERSION for op in range(_max_known_opset + 1, _current_opset + 1)})
+if _current_opset > MAX_RELEASED_OPSET:
+    OPSET_TO_IR_VERSION.update({op: onnx.IR_VERSION for op in range(MAX_RELEASED_OPSET + 1, _current_opset + 1)})
