@@ -1,0 +1,86 @@
+name: ONNX 1.23 package compatibility
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  onnx-1-23-package-api:
+    name: ONNX 1.23 package/API smoke (advisory)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+
+      - name: Install ONNX 1.23 and tf2onnx core dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # Keep this lane independent from TensorFlow on purpose. The existing
+          # TF 2.15 + ONNX 1.21/1.22 package lanes currently hit an ml-dtypes /
+          # NumPy dependency conflict before tf2onnx compatibility is exercised.
+          # This smoke isolates the ONNX Python API surface first.
+          pip install "numpy<2" onnx==1.23.0 requests "flatbuffers>=1.12"
+          pip install --no-deps -e .
+          python -m pip check
+
+      - name: Exercise ONNX APIs used by tf2onnx
+        run: |
+          python - <<'PY'
+          import numpy as np
+          from onnx import TensorProto, checker, defs, helper, numpy_helper, shape_inference
+          from tf2onnx import constants
+
+          latest_opset = defs.onnx_opset_version()
+          assert latest_opset in constants.OPSET_TO_IR_VERSION, (
+              f"ONNX opset {latest_opset} is missing from OPSET_TO_IR_VERSION"
+          )
+
+          float_dtype = helper.tensor_dtype_to_np_dtype(TensorProto.FLOAT)
+          assert np.dtype(float_dtype) == np.dtype(np.float32)
+
+          graph = helper.make_graph(
+              [helper.make_node("Identity", ["x"], ["y"])],
+              "onnx-1.23-api-smoke",
+              [helper.make_tensor_value_info("x", TensorProto.FLOAT, [2])],
+              [helper.make_tensor_value_info("y", TensorProto.FLOAT, [2])],
+          )
+          model = helper.make_model(
+              graph,
+              opset_imports=[helper.make_opsetid("", latest_opset)],
+          )
+          model.ir_version = constants.OPSET_TO_IR_VERSION[latest_opset]
+
+          checker.check_model(model)
+          inferred = shape_inference.infer_shapes(model)
+          assert inferred.ir_version == model.ir_version
+
+          tensor = numpy_helper.from_array(
+              np.asarray([1.0, 2.0], dtype=np.float32),
+              name="weights",
+          )
+          np.testing.assert_array_equal(
+              numpy_helper.to_array(tensor),
+              np.asarray([1.0, 2.0], dtype=np.float32),
+          )
+
+          print(
+              "ONNX 1.23 package/API smoke passed:",
+              f"opset={latest_opset}",
+              f"ir={model.ir_version}",
+          )
+          PY
