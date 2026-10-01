@@ -529,7 +529,6 @@ def parse_tflite_graph(tflite_g, opcodes_map, model, input_prefix='', tensor_sha
                         output_shapes[out] = None
         if has_prequantized_output:
             output_names = [get_prequant(out) for out in output_names]
-        onnx_node = utils.make_onnx_node_with_attr(optype, input_names, output_names, name=output_names[0], **attr)
         node_name = output_names[0] if output_names else utils.make_name(f"{optype}_Output")
         onnx_node = utils.make_onnx_node_with_attr(optype, input_names, output_names, name=node_name, **attr)
         onnx_nodes.append(onnx_node)
