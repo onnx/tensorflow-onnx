@@ -114,11 +114,12 @@ class ONNXShapeInferenceTests(Tf2OnnxBackendTestBase):
         graph.add_graph_output(node.output[0])
         self._run_test_case(graph, self._generate_random_inputs(inputs, shapes, dtypes))
 
-    def _test_matmul_unknown_shape(self, shapes):
-        data_shapes = [
-            [1 if s == -1 else s for s in shapes[0]],
-            [1 if s == -1 else s for s in shapes[1]]
-        ]
+    def _test_matmul_unknown_shape(self, shapes, data_shapes=None):
+        if data_shapes is None:
+            data_shapes = [
+                [1 if s == -1 else s for s in shapes[0]],
+                [1 if s == -1 else s for s in shapes[1]]
+            ]
         inputs = [INPUT1, INPUT2]
         dtypes = [TensorProto.FLOAT, TensorProto.FLOAT]
         graph = self._create_empty_graph(inputs, shapes, dtypes)
@@ -128,7 +129,8 @@ class ONNXShapeInferenceTests(Tf2OnnxBackendTestBase):
 
     def test_matmul_unknown(self):
         self._test_matmul_unknown_shape([[-1], [-1]])
-        self._test_matmul_unknown_shape([[3], [-1]])
+        # the unknown dim is the contraction dim K, so it must match the other operand (3), not 1
+        self._test_matmul_unknown_shape([[3], [-1]], data_shapes=[[3], [3]])
         self._test_matmul_unknown_shape([[2], [2, -1]])
         self._test_matmul_unknown_shape([[4, 2], [2, -1]])
         self._test_matmul_unknown_shape([[1, 4, 2], [-1, 2, 5]])
