@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 name: ONNX 1.23 package compatibility
 
 on:
@@ -18,7 +20,7 @@ concurrency:
 
 jobs:
   onnx-1-23-package-api:
-    name: ONNX 1.23 package/API smoke (advisory)
+    name: ONNX 1.23 tf2onnx optimizer smoke (advisory)
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
@@ -33,69 +35,88 @@ jobs:
       - name: Install ONNX 1.23 and tf2onnx core dependencies
         run: |
           python -m pip install --upgrade pip
-          # Keep this lane independent from TensorFlow on purpose. The existing
-          # TF 2.15 + ONNX 1.21/1.22 package lanes currently hit an ml-dtypes /
-          # NumPy dependency conflict before tf2onnx compatibility is exercised.
-          # This smoke isolates the ONNX Python API surface first.
+          # Keep this lane independent from TensorFlow. ONNX 1.23 requires
+          # protobuf>=6.31.1, which TensorFlow only accepts starting at 2.20,
+          # so a TF-based lane would conflate dependency resolution with the
+          # tf2onnx/ONNX package-compatibility signal we want here.
           pip install "numpy<2" onnx==1.23.0 requests "flatbuffers>=1.12"
           pip install --no-deps -e .
           python -m pip check
 
-      - name: Exercise ONNX APIs used by tf2onnx
+      - name: Exercise tf2onnx optimizers without TensorFlow
         run: |
           python - <<'PY'
-          import importlib.util
-          from pathlib import Path
+          import sys
+          import types
 
-          import numpy as np
-          from onnx import TensorProto, checker, defs, helper, numpy_helper, shape_inference
+          from onnx import TensorProto, checker, defs, helper
 
-          # Load the real constants module directly from its source file so this
-          # package-API lane stays independent from TensorFlow. Importing the
-          # tf2onnx package normally executes verbose_logging.py, which imports
-          # TensorFlow before any ONNX compatibility code is reached.
-          constants_path = Path("tf2onnx/constants.py")
-          spec = importlib.util.spec_from_file_location("tf2onnx_constants_smoke", constants_path)
-          assert spec is not None and spec.loader is not None
-          constants = importlib.util.module_from_spec(spec)
-          spec.loader.exec_module(constants)
+          # tf2onnx's optimizer/graph path does not use TensorFlow, but package
+          # initialization imports verbose_logging.py, whose only module-level
+          # TensorFlow dependency is the import itself. Stub that module so this
+          # lane proves the optimizer path stays usable without a TF install.
+          sys.modules["tensorflow"] = types.ModuleType("tensorflow")
+
+          from tf2onnx.graph import GraphUtil
 
           latest_opset = defs.onnx_opset_version()
-          assert latest_opset in constants.OPSET_TO_IR_VERSION, (
-              f"ONNX opset {latest_opset} is missing from OPSET_TO_IR_VERSION"
-          )
 
-          float_dtype = helper.tensor_dtype_to_np_dtype(TensorProto.FLOAT)
-          assert np.dtype(float_dtype) == np.dtype(np.float32)
+          def make_model(nodes, name, output_shape):
+              graph = helper.make_graph(
+                  nodes,
+                  name,
+                  [helper.make_tensor_value_info("x", TensorProto.FLOAT, [2, 3, 4])],
+                  [helper.make_tensor_value_info("y", TensorProto.FLOAT, output_shape)],
+              )
+              return helper.make_model(
+                  graph,
+                  opset_imports=[helper.make_opsetid("", latest_opset)],
+              )
 
-          graph = helper.make_graph(
-              [helper.make_node("Identity", ["x"], ["y"])],
-              "onnx-1.23-api-smoke",
-              [helper.make_tensor_value_info("x", TensorProto.FLOAT, [2])],
-              [helper.make_tensor_value_info("y", TensorProto.FLOAT, [2])],
+          identity_model = make_model(
+              [
+                  helper.make_node("Identity", ["x"], ["mid"], name="identity_1"),
+                  helper.make_node("Identity", ["mid"], ["y"], name="identity_2"),
+              ],
+              "tf2onnx-identity-smoke",
+              [2, 3, 4],
           )
-          model = helper.make_model(
-              graph,
-              opset_imports=[helper.make_opsetid("", latest_opset)],
+          optimized_identity = GraphUtil.optimize_model_proto(
+              identity_model,
+              catch_errors=False,
           )
-          model.ir_version = constants.OPSET_TO_IR_VERSION[latest_opset]
+          checker.check_model(optimized_identity)
+          identity_counts = GraphUtil.get_node_count_from_onnx_graph(
+              optimized_identity.graph
+          )
+          assert identity_counts["Identity"] == 1, identity_counts
 
-          checker.check_model(model)
-          inferred = shape_inference.infer_shapes(model)
-          assert inferred.ir_version == model.ir_version
-
-          tensor = numpy_helper.from_array(
-              np.asarray([1.0, 2.0], dtype=np.float32),
-              name="weights",
+          transpose_model = make_model(
+              [
+                  helper.make_node(
+                      "Transpose", ["x"], ["mid"], perm=[0, 2, 1], name="transpose_1"
+                  ),
+                  helper.make_node(
+                      "Transpose", ["mid"], ["y"], perm=[0, 2, 1], name="transpose_2"
+                  ),
+              ],
+              "tf2onnx-transpose-smoke",
+              [2, 3, 4],
           )
-          np.testing.assert_array_equal(
-              numpy_helper.to_array(tensor),
-              np.asarray([1.0, 2.0], dtype=np.float32),
+          optimized_transpose = GraphUtil.optimize_model_proto(
+              transpose_model,
+              catch_errors=False,
           )
+          checker.check_model(optimized_transpose)
+          transpose_counts = GraphUtil.get_node_count_from_onnx_graph(
+              optimized_transpose.graph
+          )
+          assert transpose_counts["Transpose"] == 0, transpose_counts
 
           print(
-              "ONNX 1.23 package/API smoke passed:",
+              "ONNX 1.23 tf2onnx optimizer smoke passed:",
               f"opset={latest_opset}",
-              f"ir={model.ir_version}",
+              f"identity_nodes={identity_counts['Identity']}",
+              f"transpose_nodes={transpose_counts['Transpose']}",
           )
           PY
