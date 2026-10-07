@@ -1,0 +1,122 @@
+# SPDX-License-Identifier: Apache-2.0
+
+name: ONNX 1.23 package compatibility
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  onnx-1-23-package-api:
+    name: ONNX 1.23 tf2onnx optimizer smoke (advisory)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+
+      - name: Install ONNX 1.23 and tf2onnx core dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # Keep this lane independent from TensorFlow. ONNX 1.23 requires
+          # protobuf>=6.31.1, which TensorFlow only accepts starting at 2.20,
+          # so a TF-based lane would conflate dependency resolution with the
+          # tf2onnx/ONNX package-compatibility signal we want here.
+          pip install "numpy<2" onnx==1.23.0 requests "flatbuffers>=1.12"
+          pip install --no-deps -e .
+          python -m pip check
+
+      - name: Exercise tf2onnx optimizers without TensorFlow
+        run: |
+          python - <<'PY'
+          import sys
+          import types
+
+          from onnx import TensorProto, checker, defs, helper
+
+          # tf2onnx's optimizer/graph path does not use TensorFlow, but package
+          # initialization imports verbose_logging.py, whose only module-level
+          # TensorFlow dependency is the import itself. Stub that module so this
+          # lane proves the optimizer path stays usable without a TF install.
+          sys.modules["tensorflow"] = types.ModuleType("tensorflow")
+
+          from tf2onnx.graph import GraphUtil
+
+          latest_opset = defs.onnx_opset_version()
+
+          def make_model(nodes, name, output_shape):
+              graph = helper.make_graph(
+                  nodes,
+                  name,
+                  [helper.make_tensor_value_info("x", TensorProto.FLOAT, [2, 3, 4])],
+                  [helper.make_tensor_value_info("y", TensorProto.FLOAT, output_shape)],
+              )
+              return helper.make_model(
+                  graph,
+                  opset_imports=[helper.make_opsetid("", latest_opset)],
+              )
+
+          identity_model = make_model(
+              [
+                  helper.make_node("Identity", ["x"], ["mid"], name="identity_1"),
+                  helper.make_node("Identity", ["mid"], ["y"], name="identity_2"),
+              ],
+              "tf2onnx-identity-smoke",
+              [2, 3, 4],
+          )
+          optimized_identity = GraphUtil.optimize_model_proto(
+              identity_model,
+              catch_errors=False,
+          )
+          checker.check_model(optimized_identity)
+          identity_counts = GraphUtil.get_node_count_from_onnx_graph(
+              optimized_identity.graph
+          )
+          assert identity_counts["Identity"] == 1, identity_counts
+
+          transpose_model = make_model(
+              [
+                  helper.make_node(
+                      "Transpose", ["x"], ["mid"], perm=[0, 2, 1], name="transpose_1"
+                  ),
+                  helper.make_node(
+                      "Transpose", ["mid"], ["y"], perm=[0, 2, 1], name="transpose_2"
+                  ),
+              ],
+              "tf2onnx-transpose-smoke",
+              [2, 3, 4],
+          )
+          optimized_transpose = GraphUtil.optimize_model_proto(
+              transpose_model,
+              catch_errors=False,
+          )
+          checker.check_model(optimized_transpose)
+          transpose_counts = GraphUtil.get_node_count_from_onnx_graph(
+              optimized_transpose.graph
+          )
+          assert transpose_counts["Transpose"] == 0, transpose_counts
+
+          print(
+              "ONNX 1.23 tf2onnx optimizer smoke passed:",
+              f"opset={latest_opset}",
+              f"identity_nodes={identity_counts['Identity']}",
+              f"transpose_nodes={transpose_counts['Transpose']}",
+          )
+          PY
