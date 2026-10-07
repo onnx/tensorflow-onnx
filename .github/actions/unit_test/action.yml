@@ -17,6 +17,9 @@ inputs:
   numpy_spec:
     description: 'pip requirement spec for numpy (e.g. "numpy<2" or "numpy>=2")'
     default: 'numpy<2'
+  use_uv:
+    description: 'Prototype: resolve/install deps with uv in one pass instead of pip'
+    default: 'false'
 
 runs:
   using: "composite"
@@ -26,7 +29,12 @@ runs:
       with:
         python-version: ${{ inputs.python_version }}
 
-    - name: Install dependencies (TF-v${{ inputs.tf_version }})
+    - name: Set up uv
+      if: inputs.use_uv == 'true'
+      uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+
+    - name: Install dependencies (TF-v${{ inputs.tf_version }}, pip)
+      if: inputs.use_uv != 'true'
       shell: bash
       env:
         TF_VERSION: ${{ inputs.tf_version }}
@@ -36,6 +44,18 @@ runs:
       run: |
         chmod +x ./tests/utils/setup_test_env.sh
         ./tests/utils/setup_test_env.sh "$TF_VERSION" "$ORT_VERSION" "$ONNX_VERSION" "$NUMPY_SPEC"
+
+    - name: Install dependencies (TF-v${{ inputs.tf_version }}, uv)
+      if: inputs.use_uv == 'true'
+      shell: bash
+      env:
+        TF_VERSION: ${{ inputs.tf_version }}
+        ORT_VERSION: ${{ inputs.ort_version }}
+        ONNX_VERSION: ${{ inputs.onnx_version }}
+        NUMPY_SPEC: ${{ inputs.numpy_spec }}
+      run: |
+        chmod +x ./tests/utils/setup_test_env_uv.sh
+        ./tests/utils/setup_test_env_uv.sh "$TF_VERSION" "$ORT_VERSION" "$ONNX_VERSION" "$NUMPY_SPEC"
 
     - name: Fix Paths (Windows only)
       shell: pwsh
