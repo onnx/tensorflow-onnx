@@ -10,6 +10,7 @@ from tf2onnx.rewriter.dropout_rewriter import rewrite_dropout
 from tf2onnx.rewriter.eye_rewriter import rewrite_eye
 from tf2onnx.rewriter.flatten_rewriter import rewrite_flatten
 from tf2onnx.rewriter.fused_op_rewriter import rewrite_fused_ops
+from tf2onnx.rewriter.gelu_rewriter import rewrite_gelu
 from tf2onnx.rewriter.gemm_rewriter import rewrite_gemm
 from tf2onnx.rewriter.gru_tf2_rewriter import rewrite_gru_tf2
 from tf2onnx.rewriter.layer_normalization_rewriter import rewrite_layer_normalization
@@ -35,6 +36,7 @@ __all__ = [
     "rewrite_dropout",
     "rewrite_eye",
     "rewrite_flatten",
+    "rewrite_gelu",
     "rewrite_gemm",
     "rewrite_leakyrelu",
     "rewrite_random_normal",
