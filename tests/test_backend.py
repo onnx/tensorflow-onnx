@@ -4022,6 +4022,17 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(res, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: input_val_1, _INPUT1: input_val_2}, rtol=1e-4)
 
+    @check_opset_min_version(10, "Mod")
+    def test_floordiv_floormod_negative_int(self):
+        for dtype in [np.int32, np.int64]:
+            input_val_1 = np.arange(-12, 12).reshape(4, 6).astype(dtype)
+            input_val_2 = np.array([3, -3, 4, -4, 5, -5], dtype=dtype)
+            def func(input_1, input_2):
+                res = tf.math.floordiv(input_1, input_2)
+                res1 = floormod(input_1, input_2)
+                return tf.identity(res, name=_TFOUTPUT), tf.identity(res1, name=_TFOUTPUT1)
+            self._run_test_case(func, [_OUTPUT, _OUTPUT1], {_INPUT: input_val_1, _INPUT1: input_val_2})
+
     def test_logical_not(self):
         input_val = np.random.randint(0, 2, (10, 20)).astype(bool)
         def func(x):
