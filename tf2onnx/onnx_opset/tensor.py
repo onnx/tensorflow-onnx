@@ -1440,6 +1440,17 @@ class OneHot:
             if node.get_attr('axis').i == 0:
                 node.set_attr('axis', -1)
 
+        # TF encodes negative indices as all off_value, but ONNX OneHot counts them from the back.
+        # Move them out of the [-depth, depth - 1] range so that they are encoded as off_value too.
+        indices_dtype = ctx.get_dtype(indices)
+        if indices_dtype in [onnx_pb.TensorProto.INT32, onnx_pb.TensorProto.INT64]:
+            np_dtype = utils.map_onnx_to_numpy_type(indices_dtype)
+            zero = ctx.make_const(utils.make_name("zero"), np.array(0, dtype=np_dtype)).output[0]
+            out_of_range = ctx.make_const(utils.make_name("out_of_range"),
+                                          np.array(np.iinfo(np_dtype).max, dtype=np_dtype)).output[0]
+            is_negative = ctx.make_node("Less", [indices, zero]).output[0]
+            indices = ctx.make_node("Where", [is_negative, out_of_range, indices]).output[0]
+
         if ctx.is_target(constants.TARGET_RS6) \
                 and ctx.get_dtype(indices) != onnx_pb.TensorProto.INT64:
             indices = ctx.make_node("Cast", [indices], attr={"to": onnx_pb.TensorProto.INT64}).output[0]

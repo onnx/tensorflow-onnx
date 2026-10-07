@@ -2576,6 +2576,16 @@ class BackendTests(Tf2OnnxBackendTestBase):
                 self.assertTrue(len(group_nodes_by_type(graph)["OneHot"]) == 1, "onnx onehot should be used")
 
     @check_opset_min_version(9, "onehot")
+    def test_onehot_negative_indices(self):
+        # tf.one_hot encodes negative indices as all off_value
+        for np_dtype in [np.int32, np.int64]:
+            for x_val in [np.array([0, -1, 2, -3], dtype=np_dtype), np.array([[0, -1], [2, 1]], dtype=np_dtype)]:
+                def func(x):
+                    x_ = tf.one_hot(x, 3, on_value=5.0, off_value=1.0)
+                    return tf.identity(x_, name=_TFOUTPUT)
+                self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
+    @check_opset_min_version(9, "onehot")
     @skip_tfjs("tfjs produces incorrect results")
     def test_onehot_rank0(self):
         depth = 5
