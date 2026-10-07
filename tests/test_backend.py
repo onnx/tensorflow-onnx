@@ -5105,6 +5105,17 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val, _INPUT2: z_val})
 
+    @check_opset_min_version(16, "ScatterND reduction")
+    def test_scatternd_duplicate_indices(self):
+        x_val = np.array([1, 1, 3, 1], dtype=np.int32).reshape((4, 1))
+        y_val = np.array([9, 10, 11, 12], dtype=np.float32).reshape((4))
+        z_val = np.array([5], dtype=np.int32).reshape(1)
+
+        def func(x, y, z):
+            x_ = tf.scatter_nd(x, y, z)
+            return tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: y_val, _INPUT2: z_val})
+
     @check_opset_min_version(11, "Unique")
     def test_unique(self):
         x_val = np.array([1, 2, 8, 1, 2, 2, 7, 7, 7, 1], dtype=np.float32)
