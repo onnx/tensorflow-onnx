@@ -1998,6 +1998,34 @@ class BackendTests(Tf2OnnxBackendTestBase):
             self._run_test_case(func, [_OUTPUT], {_INPUT: data_val, _INPUT1: segs_val})
 
     @check_opset_min_version(11, "ScatterND")
+    @check_tf_min_version("2.3", "needs tf 2.3")
+    def test_segment_ops_empty_segments(self):
+        # segments 1 and 3 are empty
+        segs_val = np.array([0, 0, 2, 2, 4], dtype=np.int32)
+        sorted_ops = [tf.math.segment_sum, tf.math.segment_prod, tf.math.segment_min, tf.math.segment_max]
+        unsorted_ops = [tf.math.unsorted_segment_max, tf.math.unsorted_segment_min, tf.math.unsorted_segment_prod]
+        for dtype in [np.float32, np.int32]:
+            data_val = (np.arange(5 * 2, dtype=dtype) - 4).reshape([5, 2])
+            for tf_op in sorted_ops + unsorted_ops:
+                def func(data, segments):
+                    if tf_op in unsorted_ops:
+                        x_ = tf_op(data, segments, num_segments=6)
+                    else:
+                        x_ = tf_op(data, segments)
+                    return tf.identity(x_, name=_TFOUTPUT)
+                self._run_test_case(func, [_OUTPUT], {_INPUT: data_val, _INPUT1: segs_val})
+        data_val = np.arange(5 * 2, dtype=np.float32).reshape([5, 2])
+        indices_val = np.arange(5, dtype=np.int32)
+        for tf_op in [tf.math.segment_mean, tf.sparse.segment_mean, tf.sparse.segment_sqrt_n]:
+            def func(data, segments):
+                if tf_op is tf.math.segment_mean:
+                    x_ = tf_op(data, segments)
+                else:
+                    x_ = tf_op(data, indices_val, segments)
+                return tf.identity(x_, name=_TFOUTPUT)
+            self._run_test_case(func, [_OUTPUT], {_INPUT: data_val, _INPUT1: segs_val})
+
+    @check_opset_min_version(11, "ScatterND")
     @check_tf_min_version("2.3", "num_segments can be int64 in tf 2.3")
     def test_segment_op_types(self):
         data_dtypes = [np.int32, np.float32]
