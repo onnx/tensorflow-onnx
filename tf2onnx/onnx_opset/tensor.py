@@ -659,6 +659,12 @@ class ScatterND:
         # reorder inputs to match onnx
         ctx.replace_inputs(node, [node.input[2], node.input[0], node.input[1]])
 
+    @classmethod
+    def version_16(cls, ctx, node, **kwargs):
+        cls.version_11(ctx, node, **kwargs)
+        # tf.scatter_nd sums the updates of duplicate indices.
+        node.set_attr("reduction", "add")
+
 
 @tf_op("TensorScatterAdd", onnx_op="ScatterND")
 class TensorScatterAdd:
