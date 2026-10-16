@@ -79,6 +79,29 @@ ONNX Runtime (available for Linux, Windows, and Mac):
 
 ```pip install -U tf2onnx```
 
+### TensorFlow version compatibility
+
+Name the TensorFlow version you use in the same install command. Installing TensorFlow first and
+`tf2onnx` later can pull an onnx release whose dependencies break your TensorFlow:
+
+```pip install "tensorflow==2.15.*" tf2onnx```
+
+On TF 2.15/2.17 also pin onnx below 1.19: onnx 1.19.0 declares its `ml_dtypes` dependency without a
+version bound, and `import onnx` then fails.
+
+| TensorFlow | Install command | onnx installed |
+|---|---|---|
+| 2.13.x | `pip install "tensorflow==2.13.*" tf2onnx` | 1.17.0 |
+| 2.15.x | `pip install "tensorflow==2.15.*" tf2onnx "onnx<1.19"` | 1.18.0 |
+| 2.17.x | `pip install "tensorflow==2.17.*" tf2onnx "onnx<1.19"` | 1.18.0 |
+| 2.18.x | `pip install "tensorflow==2.18.*" tf2onnx` | 1.22.0 |
+| 2.19.x | `pip install "tensorflow==2.19.*" tf2onnx` | 1.22.0 |
+| 2.20.x | `pip install "tensorflow==2.20.*" tf2onnx` | 1.23.2 |
+
+Verified 2026-10-07 on Python 3.11 / Linux with tf2onnx 1.17.0 (see issue #2504). The same commands
+also repair an environment broken by the old README order, e.g.
+`pip install "tensorflow==2.15.*" "onnx<1.19"`.
+
 ### Install latest from github
 
 ```pip install git+https://github.com/onnx/tensorflow-onnx```
