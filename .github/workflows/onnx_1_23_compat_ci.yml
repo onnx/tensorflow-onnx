@@ -39,7 +39,7 @@ jobs:
           # protobuf>=6.31.1, which TensorFlow only accepts starting at 2.20,
           # so a TF-based lane would conflate dependency resolution with the
           # tf2onnx/ONNX package-compatibility signal we want here.
-          pip install "numpy<2" onnx==1.23.0 requests "flatbuffers>=1.12"
+          pip install "numpy<2" onnx==1.23.0 requests "flatbuffers>=1.12" packaging
           pip install --no-deps -e .
           python -m pip check
 
