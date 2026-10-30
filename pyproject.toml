@@ -16,7 +16,11 @@ authors = [
 ]
 dependencies = [
     "numpy>=1.23.5",
-    "onnx>=1.14.0",
+    # onnx 1.19.0 needs ml_dtypes>=0.5 but declares ml_dtypes without a bound,
+    # so on TensorFlow 2.14-2.17 (ml_dtypes<0.5) the resolver picks it and
+    # `import onnx` fails. Later releases declare the bound correctly (#2504).
+    "onnx>=1.14.0,!=1.19.0",
+    "packaging",
     "requests",
     "flatbuffers>=1.12",
     # protobuf is intentionally not pinned here: it is a transitive dependency of
