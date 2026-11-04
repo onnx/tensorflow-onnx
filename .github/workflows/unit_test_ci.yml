@@ -31,7 +31,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ['ubuntu-latest', 'windows-2022']
+        os: ['ubuntu-24.04', 'windows-2022']
         tf_version: ['2.13.0', '2.15.0']
         python_version: ['3.10', '3.11']
         opset_version: ['18', '15']
@@ -58,28 +58,28 @@ jobs:
           # in 1.25.0; RandomNormal/RandomUniform/Multinomial still have no
           # opset-22 kernel as of 1.28.0, so tests hitting those are skipped
           # in tests/test_backend.py pending upstream ort support.
-          - os: 'ubuntu-latest'
+          - os: 'ubuntu-24.04'
             tf_version: '2.15.0'
             python_version: '3.11'
             opset_version: '19'
             onnx_version: '1.17.0'
             ort_version: '1.19.2'
             experimental: true
-          - os: 'ubuntu-latest'
+          - os: 'ubuntu-24.04'
             tf_version: '2.15.0'
             python_version: '3.11'
             opset_version: '20'
             onnx_version: '1.17.0'
             ort_version: '1.19.2'
             experimental: true
-          - os: 'ubuntu-latest'
+          - os: 'ubuntu-24.04'
             tf_version: '2.15.0'
             python_version: '3.11'
             opset_version: '21'
             onnx_version: '1.17.0'
             ort_version: '1.19.2'
             experimental: true
-          - os: 'ubuntu-latest'
+          - os: 'ubuntu-24.04'
             tf_version: '2.15.0'
             python_version: '3.11'
             opset_version: '22'
@@ -95,14 +95,14 @@ jobs:
           # numpy 2.x, so a failure here may be a numpy-ABI mismatch rather than a
           # real onnx-API regression - check the log before acting. These jobs are
           # advisory (experimental) so such noise never blocks other PRs.
-          - os: 'ubuntu-latest'
+          - os: 'ubuntu-24.04'
             tf_version: '2.15.0'
             python_version: '3.11'
             opset_version: '20'
             onnx_version: '1.21.0'
             ort_version: '1.20.1'
             experimental: true
-          - os: 'ubuntu-latest'
+          - os: 'ubuntu-24.04'
             tf_version: '2.15.0'
             python_version: '3.11'
             opset_version: '20'
@@ -127,7 +127,7 @@ jobs:
           skip_tflite: 'False'
       - name: Upload Test Results
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: Test Results (${{ matrix.os }}-tf${{ matrix.tf_version }}-py${{ matrix.python_version }}-opset${{ matrix.opset_version }})
           path: junit/test-results.xml
@@ -148,13 +148,13 @@ jobs:
     # it can only fail for a PR that actually changes the handled-op set - never
     # for unrelated changes. `continue-on-error` keeps it non-blocking while it
     # beds in; promote to a required check once the baseline is trusted.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     continue-on-error: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: '3.11'
       - name: Install tf2onnx
