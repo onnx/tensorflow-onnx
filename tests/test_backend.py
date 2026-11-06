@@ -4928,6 +4928,32 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
+    @check_opset_min_version(10, "Slice")
+    def test_cumprod_negative_axis(self):
+        x_val = np.arange(1, 25, dtype=np.float32).reshape((2, 3, 4))
+        def func(x):
+            x_ = tf.math.cumprod(x, axis=-1)
+            return tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
+    @check_opset_min_version(10, "Slice")
+    def test_cumprod_negative_axis_reverse_exclusive(self):
+        x_val = np.arange(1, 25, dtype=np.float32).reshape((2, 3, 4))
+        def func(x):
+            x_ = tf.math.cumprod(x, axis=-2, reverse=True, exclusive=True)
+            return tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
+    @check_opset_min_version(10, "Slice")
+    @skip_tflite("TFLite interpreter fails to resize the scalar axis input")
+    def test_cumprod_negative_axis_as_input(self):
+        x_val = np.arange(1, 25, dtype=np.float32).reshape((2, 3, 4))
+        axis_val = np.array(-1, dtype=np.int32)
+        def func(x, axis):
+            x_ = tf.math.cumprod(x, axis=axis)
+            return tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val, _INPUT1: axis_val})
+
     @check_opset_min_version(11, "Round")
     def test_round(self):
         x_val = np.array([-0.7, -0.5, -0.0, 0.0, +0.0, 0.3, 0.5, 0.7, float('nan')], dtype=np.float32)
