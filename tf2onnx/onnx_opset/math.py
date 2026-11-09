@@ -199,6 +199,35 @@ class ClipByValueOp:
     def version_12(cls, ctx, node, **kwargs):
         node.type = 'Clip' # clip supports all types now
 
+@tf_op("Log1p")
+class Log1p:
+    @classmethod
+    def version_11(cls, ctx, node, **kwargs):
+        # log(1 + x) returns 0 once 1 + x rounds to 1, so use Goldberg's x * log(u) / (u - 1)
+        # with u = 1 + x, which is x where u == 1. Past 1 / eps the 1 no longer matters and the
+        # formula would give inf / inf for x = inf, so log(u) is used there.
+        dtype = ctx.get_dtype(node.input[0])
+        utils.make_sure(dtype in [onnx_pb.TensorProto.FLOAT16, onnx_pb.TensorProto.FLOAT, onnx_pb.TensorProto.DOUBLE],
+                        "Log1p is only supported for float16, float32 and float64 inputs, node %s", node.name)
+        np_dtype = utils.map_onnx_to_numpy_type(dtype)
+        x = node.input[0]
+        one = ctx.make_const(utils.make_name("one"), np.array(1, np_dtype)).output[0]
+        large = ctx.make_const(utils.make_name("large"), np.array(1 / np.finfo(np_dtype).eps, np_dtype)).output[0]
+        u = ctx.make_node("Add", [x, one]).output[0]
+        log_u = ctx.make_node("Log", [u]).output[0]
+        x_log_u = ctx.make_node("Mul", [x, log_u]).output[0]
+        u_minus_one = ctx.make_node("Sub", [u, one]).output[0]
+        scaled = ctx.make_node("Div", [x_log_u, u_minus_one]).output[0]
+        u_is_one = ctx.make_node("Equal", [u, one]).output[0]
+        small = ctx.make_node("Where", [u_is_one, x, scaled]).output[0]
+        x_is_large = ctx.make_node("Greater", [x, large]).output[0]
+        shapes = node.output_shapes
+        dtypes = node.output_dtypes
+        ctx.remove_node(node.name)
+        ctx.make_node("Where", [x_is_large, log_u, small], name=node.name, outputs=node.output,
+                      shapes=shapes, dtypes=dtypes)
+
+
 @tf_op(["LogSoftmax", "Softmax"])
 class Softmax:
     @classmethod
