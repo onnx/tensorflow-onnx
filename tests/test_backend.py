@@ -3324,8 +3324,6 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         _ = self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
-    # https://github.com/microsoft/onnxruntime/issues/17564
-    @skip_onnxruntime_backend("Blocked by onnxruntime issue #17564")
     @skip_caffe2_backend()
     def test_resize_area_align_coreners(self):
         x_shape = [1, 15, 20, 2]
@@ -3335,7 +3333,30 @@ class BackendTests(Tf2OnnxBackendTestBase):
             x_new_size_ = tf.constant(x_new_size)
             x_ = resize_area(x, x_new_size_, align_corners=True)
             return tf.identity(x_, name=_TFOUTPUT)
-        _ = self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+        _ = self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-5)
+
+    @skip_caffe2_backend()
+    def test_resize_area_downscale(self):
+        # non-integer ratios, where averaging differs from picking the nearest pixel
+        x_shape = [2, 15, 20, 3]
+        x_val = np.random.uniform(size=x_shape).astype("float32")
+        for x_new_size in [[4, 7], [7, 3], [1, 1], [15, 6]]:
+            def func(x):
+                x_new_size_ = tf.constant(x_new_size)
+                x_ = resize_area(x, x_new_size_)
+                return tf.identity(x_, name=_TFOUTPUT)
+            self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-5, atol=1e-5)
+
+    @skip_caffe2_backend()
+    def test_resize_area_uint8(self):
+        # images in uint8 come out as float32
+        x_shape = [1, 9, 7, 3]
+        x_val = np.random.randint(0, 256, size=x_shape).astype("uint8")
+        def func(x):
+            x_new_size_ = tf.constant([4, 5])
+            x_ = resize_area(x, x_new_size_)
+            return tf.identity(x_, name=_TFOUTPUT)
+        self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-5, atol=1e-4)
 
 
     @skip_caffe2_backend()
