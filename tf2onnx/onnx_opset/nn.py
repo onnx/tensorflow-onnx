@@ -1353,7 +1353,54 @@ class CropAndResize:
         cls.any_version_after11(13, ctx, node, **kwargs)
 
 
-@tf_op(["ResizeBilinear", "ResizeNearestNeighbor", "ResizeBicubic", "ResizeArea"])
+def _area_resize_weights(in_size, out_size, align_corners):
+    """Row i holds the share of every input pixel in output pixel i, as TensorFlow's ResizeArea computes it."""
+    scale = (in_size - 1) / (out_size - 1) if align_corners and out_size > 1 else in_size / out_size
+    weights = np.zeros((out_size, in_size), dtype=np.float64)
+    for o in range(out_size):
+        start, end = o * scale, (o + 1) * scale
+        for i in range(int(np.floor(start)), int(np.ceil(end))):
+            overlap = min(end, i + 1) - max(start, i)
+            if overlap > 0:
+                weights[o, min(i, in_size - 1)] += overlap
+    return weights / scale
+
+
+@tf_op("ResizeArea")
+class ResizeArea:
+    @classmethod
+    def version_1(cls, ctx, node, **kwargs):
+        # float32 out = ResizeArea(T images, int32 size)
+        # Each output pixel is the average of the input pixels its box covers. ONNX Resize has no
+        # such mode, but with known sizes it is separable: out = rows @ image @ cols per channel.
+        shape = ctx.get_shape(node.input[0])
+        utils.make_sure(shape is not None and len(shape) == 4 and shape[1] > 0 and shape[2] > 0
+                        and node.inputs[1].is_const(),
+                        "ResizeArea needs a known input height and width and a constant size for node %s", node.name)
+        _, h, w, _ = shape
+        nh, nw = node.inputs[1].get_tensor_value()
+        align_corners = bool(node.get_attr_value("align_corners", False))
+        dtype = ctx.get_dtype(node.output[0])
+        np_dtype = utils.map_onnx_to_numpy_type(dtype)
+
+        images = node.input[0]
+        if ctx.get_dtype(images) != dtype:
+            images = ctx.make_node("Cast", [images], attr={"to": dtype}).output[0]
+        images_nchw = ctx.make_node("Transpose", [images], {"perm": constants.NHWC_TO_NCHW})
+        row_weights = _area_resize_weights(h, nh, align_corners).astype(np_dtype)
+        col_weights = _area_resize_weights(w, nw, align_corners).T.astype(np_dtype)
+        rows = ctx.make_const(utils.make_name("area_rows"), row_weights)
+        cols = ctx.make_const(utils.make_name("area_cols"), col_weights)
+        resized = ctx.make_node("MatMul", [rows.output[0], images_nchw.output[0]])
+        resized = ctx.make_node("MatMul", [resized.output[0], cols.output[0]])
+        shapes = node.output_shapes
+        dtypes = node.output_dtypes
+        ctx.remove_node(node.name)
+        ctx.make_node("Transpose", resized.output, {"perm": constants.NCHW_TO_NHWC},
+                      name=node.name, outputs=node.output, shapes=shapes, dtypes=dtypes)
+
+
+@tf_op(["ResizeBilinear", "ResizeNearestNeighbor", "ResizeBicubic"])
 class Resize:
     @classmethod
     def version_7(cls, ctx, node, **kwargs):
