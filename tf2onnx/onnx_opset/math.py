@@ -523,6 +523,19 @@ class FloorDiv:
             ctx.copy_dtype(node.output[0], floor_res.output[0])
             ctx.copy_shape(node.output[0], floor_res.output[0])
 
+    @classmethod
+    def version_10(cls, ctx, node, **kwargs):
+        dtype = ctx.get_dtype(node.input[0])
+        if dtype in [onnx_pb.TensorProto.FLOAT, onnx_pb.TensorProto.FLOAT16, onnx_pb.TensorProto.DOUBLE]:
+            cls.version_6(ctx, node, **kwargs)
+            return
+        # Integer Div truncates toward zero but FloorDiv rounds toward negative infinity.
+        # x - FloorMod(x, y) is a multiple of y, so dividing it by y gives the floored result.
+        mod = ctx.make_node(op_type="Mod", inputs=node.input)
+        sub = ctx.make_node(op_type="Sub", inputs=[node.input[0], mod.output[0]])
+        ctx.replace_inputs(node, [sub.output[0], node.input[1]])
+        node.type = "Div"
+
 
 @tf_op("FloorMod")
 class FloorMod:
@@ -541,6 +554,15 @@ class FloorMod:
         ctx.remove_node(node.name)
         ctx.make_node(op_type="Sub", inputs=[node.input[0], mul.output[0]],
                       name=node.name, outputs=node.output, shapes=shapes, dtypes=dtypes)
+
+    @classmethod
+    def version_10(cls, ctx, node, **kwargs):
+        dtype = ctx.get_dtype(node.input[0])
+        if dtype in [onnx_pb.TensorProto.FLOAT, onnx_pb.TensorProto.FLOAT16, onnx_pb.TensorProto.DOUBLE]:
+            cls.version_7(ctx, node, **kwargs)
+            return
+        # For integers, Mod with fmod=0 takes the sign of the divisor, like FloorMod.
+        node.type = "Mod"
 
 
 @tf_op("Selu")
