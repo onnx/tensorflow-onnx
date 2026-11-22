@@ -1697,11 +1697,11 @@ def _apply_einsum_matmul(fd, op1, op2, axes, left, right, ndim,
             yield op2
 
         # Reshape
-        all_axes = list(range(0, ndim))
+        all_axes = list(range(ndim))
         new_axes = all_axes[-len(axes):] if len(axes) > 0 else []
         new_common_axes = all_axes[:len(common_axes)]
         not_in_both = []
-        for i in range(0, ndim):
+        for i in range(ndim):
             if i not in left and i not in right and i not in common_axes:
                 not_in_both.append(i)
 
@@ -1784,7 +1784,7 @@ def _decompose_einsum_equation(equation, *shapes, op_matmul='batch_dot'):
 
         # Reduction? (a dimension not used later)
         red = []
-        for d in range(0, mat.shape[1]):
+        for d in range(mat.shape[1]):
             if (mat[i + 1:, d].max() == -1 and rows[1, d] != -1 and
                     rows[0, d] == -1):
                 red.append(d)
@@ -1799,7 +1799,7 @@ def _decompose_einsum_equation(equation, *shapes, op_matmul='batch_dot'):
             common_dims = []
             left = []
             right = []
-            for d in range(0, mat.shape[1]):
+            for d in range(mat.shape[1]):
                 if rows[:, d].min() >= 0:
                     if mat[i + 1:, d].max() >= 0:
                         left.append(d)
@@ -1828,7 +1828,7 @@ def _decompose_einsum_equation(equation, *shapes, op_matmul='batch_dot'):
     if mat[len(shapes), :].max() >= 0:
         rows[1, :] = mat[len(shapes), :]
         red = []
-        for d in range(0, mat.shape[1]):
+        for d in range(mat.shape[1]):
             if rows[0, d] > 0 and rows[1, d] == -1:
                 red.append(d)
             elif rows[0, d] == -1 and rows[1, d] >= 0:
@@ -1981,11 +1981,11 @@ def compute_transposition_features(shape, perm):
 
     keys = list(feat)
     for k in keys:
-        if k.startswith('end') or k.startswith('begin'):
+        if k.startswith(('end', 'begin')):
             feat[k] = - feat[k]
-        elif k.startswith('rend') or k.startswith('rbegin'):
+        elif k.startswith(('rend', 'rbegin')):
             feat[k] = - feat[k]
-        elif k.startswith('iend') or k.startswith('ibegin'):
+        elif k.startswith(('iend', 'ibegin')):
             feat[k] = - feat[k]
         elif k == "rdiscont":
             feat[k] = - feat[k]

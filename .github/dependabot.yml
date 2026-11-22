@@ -15,3 +15,17 @@ updates:
     open-pull-requests-limit: 10
     labels:
       - "github_actions"
+
+  - package-ecosystem: "pip"
+    # Keeps the pinned lint tools in requirements-lint.txt current.
+    # Runtime dependencies in pyproject.toml are updated manually.
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    cooldown:
+      default-days: 7
+    allow:
+      - dependency-name: "ruff"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"

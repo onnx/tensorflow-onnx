@@ -18,7 +18,6 @@ class HashTable:
     @classmethod
     def version_8(cls, ctx, node, **kwargs):
         """ HashTable will be removed """
-        pass
 
 
 @tf_op("LookupTableFindV2")

@@ -390,7 +390,7 @@ class MatMul:
         if transpose_a != 0:
             shape = ctx.get_shape(node.input[0])
             if shape:
-                perm = list(range(0, len(shape)))
+                perm = list(range(len(shape)))
                 tmp = perm[-1]
                 perm[-1] = perm[-2]
                 perm[-2] = tmp
@@ -399,7 +399,7 @@ class MatMul:
         if transpose_b != 0:
             shape = ctx.get_shape(node.input[1])
             if shape:
-                perm = list(range(0, len(shape)))
+                perm = list(range(len(shape)))
                 tmp = perm[-1]
                 perm[-1] = perm[-2]
                 perm[-2] = tmp
