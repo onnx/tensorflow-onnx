@@ -151,7 +151,7 @@ def get_sentences(shape):
     def get_sentence():
         length = random.randint(2, 7)
         return ' '.join(random.choice(words) for _ in range(length))
-    return np.array([get_sentence() for _ in range(np.product(shape))]).reshape(shape)
+    return np.array([get_sentence() for _ in range(np.prod(shape))]).reshape(shape)
 
 
 _INPUT_FUNC_MAPPING = {

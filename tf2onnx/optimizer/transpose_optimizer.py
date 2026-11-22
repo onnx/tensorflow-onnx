@@ -313,6 +313,36 @@ class TransposeOptimizer(GraphOptimizerBase):
             self._g.set_shape(trans.output[0], shape)
         return True
 
+    # this is for the case where node has multiple outputs. e.g. split node.
+    # `trans` is rewired to consume node.output[0], so it must be the sole consumer of
+    # `trans`; otherwise any sibling consumer of `trans` would be silently repointed to
+    # the Split output. The only current caller (_split_handler) is reached via dispatch
+    # only when that already holds, so this guard is defensive -- it keeps the invariant
+    # for any future caller and mirrors the single-output _switch_transpose_and_node above.
+    def _switch_transpose_and_node_with_multiple_outputs(self, node, trans, update_shape=True):
+        if not self._nodes_has_single_consumer_node([trans]):
+            return False
+
+        input_index = self._get_input_index_for_trans(node, trans)
+        for idx, _output in enumerate(node.output):
+            shape = self._g.get_shape(_output)
+            nxt_nodes = self._g.find_output_consumers(_output)
+            if idx == 0:
+                transpose = trans
+                self._g.replace_input(node, node.input[input_index], transpose.input[0], input_index)
+                self._g.replace_input(trans, trans.input[0], _output, 0)
+            else:
+                transpose = self._g.make_node("Transpose", [_output], attr={"perm": trans.get_attr_value("perm")})
+            for nxt_node in nxt_nodes:
+                self._g.replace_input(nxt_node, _output, transpose.output[0])
+
+            if update_shape and shape:
+                perm_inv = invert_perm(transpose.get_attr_value("perm"))
+                new_shape = [shape[i] for i in perm_inv]
+                self._g.set_shape(_output, new_shape)
+                self._g.set_shape(transpose.output[0], shape)
+        return True
+
     # if return value is True, then it means Transpose is handled as designed
     # otherwise, it means that we skip handling since it is not in our support set
     def _handle_nhwc_tranpose(self, trans):
@@ -680,22 +710,43 @@ class TransposeOptimizer(GraphOptimizerBase):
         return False
 
     def _split_handler(self, trans, node):
-        # Todo: need handle cases where Split node has more than 1 outputs.
-        split = None
-        if self._g.opset >= 13 and len(node.input) > 1 and node.inputs[1].is_const():
-            # split is an input not attr since opset 13
-            split = node.inputs[1].get_tensor_value(as_list=True)
-        if self._handle_node_having_branches(trans, node):
+        # Dispatch on output cardinality: the two paths use different mechanisms. Split's
+        # "axis" is always an attribute; only the split sizes moved from an attribute
+        # (opset < 13) to input[1] (opset >= 13), and that difference only matters for the
+        # single-output path below.
+        if len(node.output) > 1:
+            # Multi-output: rewire the Transpose past each branch. This never touches the
+            # split sizes, so it is opset-agnostic. The switch requires `trans` to be
+            # consumed only by this Split (it rewires `trans` onto a Split output); the
+            # helper guards that precondition and bails, so honour its return value.
             perm = trans.get_attr_value("perm")
             axis = node.get_attr_value("axis", 0)
-            new_axis = perm[axis]
-            node.set_attr("axis", new_axis)
-            if split:
-                new_axes_np = np.array(split, dtype=np.int64)
-                new_axes_const = self._g.make_const(utils.make_name(node.inputs[1].name), new_axes_np)
-                self._g.replace_inputs(node, [node.input[0], new_axes_const.output[0]])
+            if axis < 0:
+                axis += get_transpose_rank(trans)
+            # [Transpose -> Split -> next] -> [Split -> Transpose -> next]; the split sizes
+            # stay the same, only the axis is relabelled to the pre-transpose layout.
+            if not self._switch_transpose_and_node_with_multiple_outputs(node, trans):
+                return False
+            node.set_attr("axis", perm[axis])
             return True
-        return False
+
+        # Single-output: _handle_node_having_branches pushes the Transpose through by wrapping
+        # every input in transpose pairs, which mangles the opset-13 1-D split-sizes const
+        # (input[1]) into a Reshape/Transpose chain. Snapshot the sizes BEFORE the push and
+        # rebuild a clean const AFTER. On opset < 13 the sizes are an attribute and untouched,
+        # so `split` stays None and this repair is skipped.
+        split = None
+        if self._g.opset >= 13 and len(node.input) > 1 and node.inputs[1].is_const():
+            split = node.inputs[1].get_tensor_value(as_list=True)
+        if not self._handle_node_having_branches(trans, node):
+            return False
+        perm = trans.get_attr_value("perm")
+        node.set_attr("axis", perm[node.get_attr_value("axis", 0)])
+        if split is not None:
+            split_sizes_np = np.array(split, dtype=np.int64)
+            split_sizes_const = self._g.make_const(utils.make_name(node.name + "_split"), split_sizes_np)
+            self._g.replace_inputs(node, [node.input[0], split_sizes_const.output[0]])
+        return True
 
     def _unsqueeze_handler(self, trans, node):
         trans_rank = get_transpose_rank(trans)

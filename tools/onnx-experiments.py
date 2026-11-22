@@ -52,7 +52,7 @@ def rewrite_constant_fold(g, ops):
         "Unsqueeze": not None,
         "Slice": not None,
         "Add": np.add,
-        "Cast": np.cast,
+        "Cast": not None,
         "Mul": np.multiply,
         "Sqrt": np.sqrt,
         "Sub": np.subtract,
@@ -78,7 +78,7 @@ def rewrite_constant_fold(g, ops):
                     if op.type == "Cast":
                         dst = op.get_attr_int("to")
                         np_type = tf2onnx.utils.map_onnx_to_numpy_type(dst)
-                        val = np.cast[np_type](*inputs)
+                        val = np.asarray(*inputs).astype(np_type)
                     elif op.type == "Transpose":
                         perm = op.get_attr("perm").ints
                         val = np.transpose(inputs[0], perm)

@@ -8,15 +8,26 @@ os.environ["PYTHONPATH"] = \
     os.environ.get("PYTHONPATH", "") + os.pathsep + "../../keras2onnx_unit_tests" + os.pathsep + "../../../"
 os.environ["TF2ONNX_CATCH_ERRORS"] = "FALSE"
 
-files = ['test_keras_applications_v2.py', 'test_transformers.py', 'test_chatbot.py',
-         'test_resnext.py']
-files.sort()
+test_runs = [
+    ("test_chatbot.py", "chatbot", False),
+    ("test_keras_applications_v2.py", "keras_applications_v2", False),
+    # Run each model in a fresh process so TensorFlow releases its native allocations.
+    ("test_resnext.py::TestResNext::test_ResNext", "resnext", True),
+    ("test_resnext.py::TestResNext::test_SEResNext", "seresnext", True),
+    ("test_transformers.py", "transformers", False),
+]
 
 res_final = True
-for f_ in files:
+for test_target, report_name, stream_output in test_runs:
+    pytest_args = [
+        sys.executable, "-m", "pytest", test_target, "--no-cov",
+        "--doctest-modules", f"--junitxml=junit/test-results-{report_name}.xml",
+    ]
+    if stream_output:
+        pytest_args.append("--capture=no")
+
     res = subprocess.run(
-        [sys.executable, "-m", "pytest", f_, "--no-cov",
-         "--doctest-modules", f"--junitxml=junit/test-results-{f_[5:-3]}.xml"],
+        pytest_args,
         check=False
     )
     if res.returncode != 0:

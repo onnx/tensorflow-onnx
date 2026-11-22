@@ -318,7 +318,7 @@ def graphs_from_tfjs(model_path, input_names=None, output_names=None, shape_over
 def read_tfjs_weight(weight, weights_data, offset):
     """Returns the name, numpy array, and number of bytes for a tfjs weight"""
     name = weight['name']
-    count = np.product(weight['shape'], dtype=np.int64)
+    count = np.prod(weight['shape'], dtype=np.int64)
     if weight['dtype'] == 'string':
         num_strings = np.prod(weight['shape'], dtype=np.int64)
         string_list, num_bytes = read_string_weight(weights_data, offset, num_strings)
