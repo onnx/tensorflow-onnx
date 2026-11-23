@@ -1762,6 +1762,12 @@ def test_batch_normalization(batch_norm_runner):
         batch_norm_runner(data, 'zeros', 'zeros', False, True, 1)
 
 
+# float32 rounding differs between TF and ONNX Runtime. On the Windows and Ubuntu Keras CI lanes
+# (TF 2.13 / 2.15) one output near zero differed by up to 1.55e-6 (1 of 720 elements), just over
+# the default atol=1e-6. A 0.01 error in a BN parameter moves the output by ~2e-2, far above 1e-5.
+BN_2_ATOL = 1e-5
+
+
 def test_batch_normalization_2(runner):
     # The CPU implementation of FusedBatchNorm only supports NHWC tensor format in tf keras
     axis_list = [-1] if is_tf_keras else [1, -1]
@@ -1778,7 +1784,7 @@ def test_batch_normalization_2(runner):
         data = np.random.randn(batch_size, input_dim_1).astype(np.float32)
         onnx_model = convert_keras(model)
         expected = model.predict(data)
-        assert runner('test_batch_normalization_2_2d', onnx_model, [data], expected)
+        assert runner('test_batch_normalization_2_2d', onnx_model, [data], expected, atol=BN_2_ATOL)
 
         model = Sequential()
         model.add(InputLayer(input_shape=(input_dim_1, input_dim_2)))
@@ -1789,7 +1795,7 @@ def test_batch_normalization_2(runner):
         data = np.random.randn(batch_size, input_dim_1, input_dim_2).astype(np.float32)
         onnx_model = convert_keras(model)
         expected = model.predict(data)
-        assert runner('test_batch_normalization_2_3d', onnx_model, [data], expected)
+        assert runner('test_batch_normalization_2_3d', onnx_model, [data], expected, atol=BN_2_ATOL)
 
         model = Sequential()
         model.add(InputLayer(input_shape=(input_dim_1, input_dim_2, input_dim_3)))
@@ -1800,7 +1806,7 @@ def test_batch_normalization_2(runner):
         data = np.random.randn(batch_size, input_dim_1, input_dim_2, input_dim_3).astype(np.float32)
         onnx_model = convert_keras(model)
         expected = model.predict(data)
-        assert runner('test_batch_normalization_2_4d', onnx_model, [data], expected)
+        assert runner('test_batch_normalization_2_4d', onnx_model, [data], expected, atol=BN_2_ATOL)
 
 
 def test_simpleRNN(runner):
@@ -2474,6 +2480,13 @@ def test_masking(runner, rnn_class):
     assert runner(onnx_model.graph.name, onnx_model, x, expected, rtol=5e-3)
 
 
+# float32 rounding differs between TF and ONNX Runtime for the GRU. On the Windows and Ubuntu Keras
+# CI lanes (TF 2.13 / 2.15) one output near zero differed by up to 1.29e-5 (1 of 16 or 32 elements),
+# over the default atol=1e-6. The outputs are tanh-bounded, and a 0.01 bias error moves them by
+# ~2e-3, far above 1e-4.
+MASKING_BIAS_ATOL = 1e-4
+
+
 @pytest.mark.parametrize("rnn_class", RNN_CLASSES)
 def test_masking_bias(runner, rnn_class):
     timesteps, features = (3, 5)
@@ -2489,7 +2502,7 @@ def test_masking_bias(runner, rnn_class):
     # Test with the default bias
     expected = model.predict(x)
     onnx_model = convert_keras(model, model.name)
-    assert runner(onnx_model.graph.name, onnx_model, x, expected)
+    assert runner(onnx_model.graph.name, onnx_model, x, expected, atol=MASKING_BIAS_ATOL)
 
     # Set bias values to random floats
     rnn_layer = model.get_layer('rnn')
@@ -2500,7 +2513,7 @@ def test_masking_bias(runner, rnn_class):
     # Test with random bias
     expected = model.predict(x)
     onnx_model = convert_keras(model, model.name)
-    assert runner(onnx_model.graph.name, onnx_model, x, expected)
+    assert runner(onnx_model.graph.name, onnx_model, x, expected, atol=MASKING_BIAS_ATOL)
 
 
 @pytest.mark.skipif(get_maximum_opset_supported() < 9, reason='bidirectional is not supported for opset < 9')
@@ -2519,7 +2532,7 @@ def test_masking_bias_bidirectional(runner, rnn_class):
     # Test with the default bias
     expected = model.predict(x)
     onnx_model = convert_keras(model, model.name)
-    assert runner(onnx_model.graph.name, onnx_model, x, expected)
+    assert runner(onnx_model.graph.name, onnx_model, x, expected, atol=MASKING_BIAS_ATOL)
 
     # Set bias values to random floats
     rnn_layer = model.get_layer('bi')
@@ -2531,7 +2544,7 @@ def test_masking_bias_bidirectional(runner, rnn_class):
     # Test with random bias
     expected = model.predict(x)
     onnx_model = convert_keras(model, model.name)
-    assert runner(onnx_model.graph.name, onnx_model, x, expected)
+    assert runner(onnx_model.graph.name, onnx_model, x, expected, atol=MASKING_BIAS_ATOL)
 
 
 @pytest.mark.parametrize("rnn_class", RNN_CLASSES)
