@@ -5,19 +5,25 @@
 # Install path check (#2504, #2503 DoD 1).
 #
 # The unit-test lanes install pinned onnx/onnxruntime versions step by step,
-# so they never see what a user gets from a fresh, one-command install. This
-# lane builds tf2onnx from the commit under test and installs it next to each
-# TensorFlow version the way the README tells users to:
+# so they never see what a user gets from a fresh install. This lane builds
+# tf2onnx from the commit under test and installs it next to each TensorFlow
+# version in one command, as #2504 recommends:
 #
 #   pip install "tensorflow==<version>.*" tf2onnx
 #
 # so pip resolves onnx, numpy, protobuf and ml_dtypes from tf2onnx's metadata.
-# It then imports tensorflow, onnx and tf2onnx and converts a small function.
-# Because dependencies come from PyPI at run time, the weekly schedule also
-# catches a new upstream release that breaks the install (as onnx 1.19.0 did
-# on TF 2.14-2.17) between PRs. GitHub only notifies the last person who
-# edited the cron line about scheduled failures, so the `notify` job opens or
-# updates an issue that mentions the maintainers listed in NOTIFY.
+# It then imports tensorflow, onnx and tf2onnx and converts a small function
+# (steps in .github/actions/install_path). Because dependencies come from PyPI
+# at run time, the weekly schedule also catches a new upstream release that
+# breaks the install (as onnx 1.19.0 did on TF 2.14-2.17) between PRs.
+#
+# GitHub only notifies the last person who edited the cron line about
+# scheduled failures, so on the schedule the `notify` job opens or updates an
+# issue that mentions the maintainers in NOTIFY, and closes it once the
+# required jobs pass again.
+#
+# A manual run can install a tf2onnx release from PyPI instead of building
+# this commit (input `tf2onnx_spec`), e.g. to check a release candidate.
 
 name: Install Path
 
@@ -35,6 +41,12 @@ on:
   schedule:
     - cron: '41 5 * * 1'
   workflow_dispatch:
+    inputs:
+      tf2onnx_spec:
+        description: 'Install tf2onnx from PyPI instead of building this commit, e.g. "tf2onnx==1.17.1rc1". Leave empty to test this commit.'
+        required: false
+        default: ''
+        type: string
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}-${{ github.event_name == 'workflow_dispatch' }}
@@ -44,7 +56,7 @@ permissions:
   contents: read
 
 jobs:
-  install:
+  required:
     name: fresh install (TF ${{ matrix.tf_version }})
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -53,98 +65,69 @@ jobs:
       matrix:
         # TF versions of the required unit-test matrix.
         tf_version: ['2.13', '2.15']
-        include:
-          # Newer TF versions users install today. Advisory until the
-          # supported-version policy in #2486 is settled.
-          - tf_version: '2.17'
-            experimental: true
-          - tf_version: '2.20'
-            experimental: true
-    continue-on-error: ${{ matrix.experimental || false }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+      - uses: ./.github/actions/install_path
         with:
-          python-version: '3.11'
+          tf_version: ${{ matrix.tf_version }}
+          tf2onnx_spec: ${{ inputs.tf2onnx_spec }}
 
-      - name: Build the tf2onnx wheel from this commit
-        run: |
-          python -m pip install --upgrade pip build
-          python -m build --wheel --outdir "$RUNNER_TEMP/dist" .
+  advisory:
+    # Newer TF versions users install today. Advisory until the
+    # supported-version policy in #2486 is settled; `notify` does not watch them.
+    name: fresh install (TF ${{ matrix.tf_version }}, advisory)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        tf_version: ['2.17', '2.20']
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - name: Install TensorFlow and tf2onnx in one command
-        env:
-          TF_VERSION: ${{ matrix.tf_version }}
-        run: |
-          python -m venv "$RUNNER_TEMP/venv"
-          . "$RUNNER_TEMP/venv/bin/activate"
-          python -m pip install --upgrade pip
-          python -m pip install "tensorflow==${TF_VERSION}.*" "$RUNNER_TEMP"/dist/tf2onnx-*.whl
-          python -m pip check
-          {
-            echo "### TF ${TF_VERSION}: resolved versions"
-            echo '```'
-            python -m pip list | grep -i -E '^(tensorflow|onnx|numpy|protobuf|ml[-_]dtypes|tf2onnx) '
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Import and convert a small function
-        run: |
-          . "$RUNNER_TEMP/venv/bin/activate"
-          # Run outside the checkout so the installed wheel is imported, not ./tf2onnx.
-          cd "$RUNNER_TEMP"
-          python - <<'PY'
-          import numpy as np
-          import onnx
-          import tensorflow as tf
-          import tf2onnx
-          from onnx.reference import ReferenceEvaluator
-
-          assert "site-packages" in tf2onnx.__file__, tf2onnx.__file__
-          print("tensorflow", tf.__version__, "onnx", onnx.__version__, "tf2onnx", tf2onnx.__version__)
-
-          @tf.function(input_signature=[tf.TensorSpec([None, 3], tf.float32, name="x")])
-          def f(x):
-              return tf.nn.relu(tf.matmul(x, tf.ones([3, 2])) - 1.0)
-
-          model, _ = tf2onnx.convert.from_function(f, input_signature=f.input_signature, opset=15)
-          onnx.checker.check_model(model)
-
-          x = np.array([[1, 2, 3], [0, 0, 1]], dtype=np.float32)
-          (got,) = ReferenceEvaluator(model).run(None, {model.graph.input[0].name: x})
-          np.testing.assert_allclose(got, f(x).numpy(), rtol=1e-6)
-          print("conversion OK")
-          PY
+      - uses: ./.github/actions/install_path
+        with:
+          tf_version: ${{ matrix.tf_version }}
+          tf2onnx_spec: ${{ inputs.tf2onnx_spec }}
 
   notify:
-    name: notify maintainers (scheduled failure)
-    needs: install
-    # Required jobs only: advisory jobs use continue-on-error, so they do not
-    # make `needs.install` fail.
-    if: failure() && github.event_name == 'schedule'
+    name: notify maintainers (scheduled run)
+    needs: required
+    # always(): also run when a required job failed, timed out or was cancelled.
+    if: always() && github.event_name == 'schedule'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
-      issues: write  # open or comment on the tracking issue for a scheduled failure
+      issues: write  # open, comment on or close the tracking issue
     steps:
-      - name: Open or update the tracking issue
+      - name: Open, update or close the tracking issue
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          RESULT: ${{ needs.required.result }}
           NOTIFY: '@andife @ryol8888'
           TITLE: 'Install path lane failed on the weekly run'
         run: |
-          body="The scheduled install-path check failed: ${RUN_URL}
-
-          A fresh \`pip install \"tensorflow==<v>.*\" tf2onnx\` no longer imports or converts on a required TF version. The job summary lists the resolved onnx / numpy / protobuf / ml_dtypes versions.
-
-          cc ${NOTIFY}"
           number=$(gh issue list --state open --search "in:title \"${TITLE}\"" --json number,title \
             --jq "map(select(.title == \"${TITLE}\")) | .[0].number // empty")
+          if [ "${RESULT}" = "success" ]; then
+            if [ -n "${number}" ]; then
+              gh issue close "${number}" --comment "The scheduled install-path check passes again: ${RUN_URL}"
+            fi
+            exit 0
+          fi
+          body="The scheduled install-path check did not pass (required jobs: ${RESULT}): ${RUN_URL}
+
+          See the failed step's log. If pip install itself succeeded, the job summary lists the resolved tensorflow / onnx / numpy / protobuf / ml_dtypes versions.
+
+          cc ${NOTIFY}"
           if [ -n "${number}" ]; then
             gh issue comment "${number}" --body "${body}"
           else
