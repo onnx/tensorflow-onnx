@@ -13,6 +13,17 @@ line or python api.
 
 ---
 
+## 🛠 Join Our Maintainer Team
+
+We are looking to **expand our maintainer team** to help support and evolve the `tf2onnx` project.
+
+If you're passionate about the ONNX standard or contributing to the open source machine learning ecosystem, we'd love to hear from you! This is a great opportunity to contribute to a widely used project and collaborate with the ONNX community.
+
+**To express interest:**
+Please [open an issue](https://github.com/onnx/tensorflow-onnx/issues/new) and let us know about your interest and background.
+
+---
+
 __Note: tensorflow.js support is experimental. While we tested it with many tfjs models from tfhub, not all models may convert correctly.__
 
 TensorFlow has many more ops than ONNX and occasionally mapping a model to ONNX creates issues.
