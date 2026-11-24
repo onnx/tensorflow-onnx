@@ -260,5 +260,38 @@ class ApiTests(Tf2OnnxBackendTestBase):
         exp_result = tf.add(x_val, x_val)
         self.assertAllClose(exp_result, oy[0], rtol=0.1, atol=0.1)
 
+    @check_tf_min_version("2.0")
+    def test_tflite_fully_connected_keep_num_dims_false(self):
+        # https://github.com/onnx/tensorflow-onnx/issues/2522
+        # A FULLY_CONNECTED op with keep_num_dims=False and a rank-3 input
+        # must keep its bias: the reshape inserted for the extra dims used
+        # to drop the bias input, so the converted model computed x @ W
+        # instead of x @ W + b.
+        output_path = os.path.join(self.test_data_directory, "model.onnx")
+
+        rng = np.random.default_rng(0)
+        w = rng.standard_normal((8, 4)).astype(np.float32)
+        b = np.array([10.0, 20.0, 30.0, 40.0], dtype=np.float32)
+
+        class FcModel(tf.Module):
+            @tf.function(input_signature=[tf.TensorSpec([1, 3, 8], tf.float32)])
+            def __call__(self, x):
+                return tf.matmul(tf.reshape(x, [-1, 8]), w) + b
+
+        model = FcModel()
+        tflite_path = os.path.join(self.test_data_directory, "fc.tflite")
+        with open(tflite_path, "wb") as f:
+            f.write(tf.lite.TFLiteConverter.from_concrete_functions(
+                [model.__call__.get_concrete_function()], model).convert())
+
+        model_proto, _ = tf2onnx.convert.from_tflite(tflite_path, output_path=output_path)
+        actual_input_names = [n.name for n in model_proto.graph.input]
+        actual_output_names = [n.name for n in model_proto.graph.output]
+
+        x_val = rng.standard_normal((1, 3, 8)).astype(np.float32)
+        oy = self.run_onnxruntime(output_path, {actual_input_names[0]: x_val}, actual_output_names)
+        exp_result = x_val.reshape(-1, 8) @ w + b
+        self.assertAllClose(exp_result, oy[0], rtol=0.1, atol=0.1)
+
 if __name__ == '__main__':
     unittest_main()
