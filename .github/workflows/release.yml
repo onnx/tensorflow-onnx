@@ -35,11 +35,42 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install build
-        run: pip install build
+      - name: Install packaging tools
+        run: python -m pip install build twine
 
       - name: Build wheel and sdist
         run: python -m build
+
+      - name: Check distribution metadata
+        run: python -m twine check dist/*
+
+      - name: Verify distribution version and contents
+        run: |
+          python - <<'PY'
+          import pathlib
+          import tarfile
+          import zipfile
+
+          expected_version = pathlib.Path("VERSION_NUMBER").read_text(encoding="utf-8").strip()
+          wheel = next(pathlib.Path("dist").glob("*.whl"))
+          source = next(pathlib.Path("dist").glob("*.tar.gz"))
+          assert f"-{expected_version}-" in wheel.name, wheel.name
+          assert f"-{expected_version}.tar.gz" in source.name, source.name
+
+          with zipfile.ZipFile(wheel) as archive:
+              names = archive.namelist()
+              entry_points = archive.read(
+                  f"tf2onnx-{expected_version}.dist-info/entry_points.txt"
+              ).decode()
+          assert "tf2onnx/version.py" in names
+          assert not any(name.startswith(("tests/", "tools/")) for name in names)
+          assert "tf2onnx = tf2onnx.convert:main" in entry_points
+
+          with tarfile.open(source) as archive:
+              names = archive.getnames()
+          assert any(name.endswith("/VERSION_NUMBER") for name in names)
+          assert not any("/setup.py" in name for name in names)
+          PY
 
       - name: Upload dist artifacts
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7

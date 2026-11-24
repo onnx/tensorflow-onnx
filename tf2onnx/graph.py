@@ -12,7 +12,7 @@ import logging
 import numpy as np
 from onnx import AttributeProto, TensorProto, helper, numpy_helper, shape_inference
 
-from tf2onnx import __version__, constants, git_version, optimizer, utils
+from tf2onnx import __version__, constants, optimizer, utils
 from tf2onnx.schemas import get_schema, infer_onnx_shape_dtype
 from tf2onnx.utils import find_opset, make_name, port_name
 
@@ -1193,7 +1193,7 @@ class Graph(object):
         if "producer_name" not in kwargs:
             kwargs = {
                 "producer_name": "tf2onnx",
-                "producer_version": __version__ + " " + git_version[:6]
+                "producer_version": __version__
             }
         if "opset_imports" not in kwargs:
             opsets = [helper.make_opsetid(constants.ONNX_DOMAIN, self._opset)]
