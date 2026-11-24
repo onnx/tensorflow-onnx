@@ -7,6 +7,7 @@ SPDX-License-Identifier: Apache-2.0
 # tf2onnx - Convert TensorFlow, Keras, Tensorflow.js and Tflite models to ONNX.
 
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/onnx/tensorflow-onnx/badge)](https://api.securityscorecards.dev/projects/github.com/onnx/tensorflow-onnx)
+[![REUSE compliant](https://api.reuse.software/badge/github.com/onnx/tensorflow-onnx)](https://api.reuse.software/info/github.com/onnx/tensorflow-onnx)
 
 tf2onnx converts TensorFlow (tf-2.x), keras, tensorflow.js and tflite models to ONNX via command
 line or python api.

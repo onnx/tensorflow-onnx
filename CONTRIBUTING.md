@@ -37,6 +37,14 @@ You are ready to sign your code by using the `-s` flag during your commits.
 git commit -s
 ```
 
+The repository follows the [REUSE specification](https://reuse.software/spec/).
+Before submitting licensing or attribution changes, run:
+
+```sh
+python -m pip install "reuse>=6.2,<7"
+reuse lint
+```
+
 
 # Code of conduct
 This project has adopted the [ONNX Code of Conduct](https://onnx.ai/codeofconduct.html).
