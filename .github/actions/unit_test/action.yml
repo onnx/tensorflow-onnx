@@ -17,6 +17,9 @@ inputs:
   numpy_spec:
     description: 'pip requirement spec for numpy (e.g. "numpy<2" or "numpy>=2")'
     default: 'numpy<2'
+  pip_check:
+    description: 'Run "pip check" after installing and fail on a dependency conflict'
+    default: 'false'
 
 runs:
   using: "composite"
@@ -36,6 +39,11 @@ runs:
       run: |
         chmod +x ./tests/utils/setup_test_env.sh
         ./tests/utils/setup_test_env.sh "$TF_VERSION" "$ORT_VERSION" "$ONNX_VERSION" "$NUMPY_SPEC"
+
+    - name: Check dependency consistency
+      if: inputs.pip_check == 'true'
+      shell: bash
+      run: pip check
 
     - name: Fix Paths (Windows only)
       shell: pwsh

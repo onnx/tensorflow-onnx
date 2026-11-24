@@ -58,27 +58,27 @@ jobs:
           # in 1.25.0; RandomNormal/RandomUniform/Multinomial still have no
           # opset-22 kernel as of 1.28.0, so tests hitting those are skipped
           # in tests/test_backend.py pending upstream ort support.
+          # Opset 19-21 are required (#2530); opset 22 stays advisory
+          # (experimental) until ort has those kernels. README.md states the
+          # tested opset range; keep it in sync with these entries.
           - os: 'ubuntu-24.04'
             tf_version: '2.15.0'
             python_version: '3.11'
             opset_version: '19'
             onnx_version: '1.17.0'
             ort_version: '1.19.2'
-            experimental: true
           - os: 'ubuntu-24.04'
             tf_version: '2.15.0'
             python_version: '3.11'
             opset_version: '20'
             onnx_version: '1.17.0'
             ort_version: '1.19.2'
-            experimental: true
           - os: 'ubuntu-24.04'
             tf_version: '2.15.0'
             python_version: '3.11'
             opset_version: '21'
             onnx_version: '1.17.0'
             ort_version: '1.19.2'
-            experimental: true
           - os: 'ubuntu-24.04'
             tf_version: '2.15.0'
             python_version: '3.11'
@@ -109,6 +109,29 @@ jobs:
             onnx_version: '1.22.0'
             ort_version: '1.20.1'
             experimental: true
+          # --- newest pip-consistent onnx per TF, required (#2529) ------------
+          # The newest onnx that installs without a dependency conflict next to
+          # each required TF, which is also what pip resolves for users:
+          #   TF 2.13 -> onnx 1.17.0 (TF 2.13 needs typing-extensions<4.6,
+          #              onnx >= 1.18 needs >=4.7.1)
+          #   TF 2.15 -> onnx 1.18.0 (TF 2.15 needs ml-dtypes~=0.2.0,
+          #              onnx >= 1.19.1 needs ml_dtypes>=0.5)
+          # Unlike the advisory lanes above these block PRs, and pip_check
+          # fails the job if the installed set is not consistent.
+          - os: 'ubuntu-24.04'
+            tf_version: '2.13.0'
+            python_version: '3.11'
+            opset_version: '18'
+            onnx_version: '1.17.0'
+            ort_version: '1.20.1'
+            pip_check: true
+          - os: 'ubuntu-24.04'
+            tf_version: '2.15.0'
+            python_version: '3.11'
+            opset_version: '18'
+            onnx_version: '1.18.0'
+            ort_version: '1.20.1'
+            pip_check: true
     runs-on: ${{ matrix.os }}
     # Newly added coverage entries are advisory (experimental) so a failure there
     # never blocks unrelated PRs; the pre-existing combinations stay required.
@@ -125,11 +148,15 @@ jobs:
           onnx_version: ${{ matrix.onnx_version }}
           opset_version: ${{ matrix.opset_version }}
           skip_tflite: 'False'
+          pip_check: ${{ matrix.pip_check || false }}
       - name: Upload Test Results
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
-          name: Test Results (${{ matrix.os }}-tf${{ matrix.tf_version }}-py${{ matrix.python_version }}-opset${{ matrix.opset_version }})
+          # onnx_version keeps the name unique: lanes that share os/TF/Python/opset
+          # and differ only in onnx would otherwise upload under one name, and the
+          # publish job downloads only one of them.
+          name: Test Results (${{ matrix.os }}-tf${{ matrix.tf_version }}-py${{ matrix.python_version }}-opset${{ matrix.opset_version }}-onnx${{ matrix.onnx_version }})
           path: junit/test-results.xml
 
   publish-test-results:
