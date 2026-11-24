@@ -58,27 +58,27 @@ jobs:
           # in 1.25.0; RandomNormal/RandomUniform/Multinomial still have no
           # opset-22 kernel as of 1.28.0, so tests hitting those are skipped
           # in tests/test_backend.py pending upstream ort support.
+          # Opset 19-21 are required (#2530); opset 22 stays advisory
+          # (experimental) until ort has those kernels. README.md states the
+          # tested opset range; keep it in sync with these entries.
           - os: 'ubuntu-24.04'
             tf_version: '2.15.0'
             python_version: '3.11'
             opset_version: '19'
             onnx_version: '1.17.0'
             ort_version: '1.19.2'
-            experimental: true
           - os: 'ubuntu-24.04'
             tf_version: '2.15.0'
             python_version: '3.11'
             opset_version: '20'
             onnx_version: '1.17.0'
             ort_version: '1.19.2'
-            experimental: true
           - os: 'ubuntu-24.04'
             tf_version: '2.15.0'
             python_version: '3.11'
             opset_version: '21'
             onnx_version: '1.17.0'
             ort_version: '1.19.2'
-            experimental: true
           - os: 'ubuntu-24.04'
             tf_version: '2.15.0'
             python_version: '3.11'
