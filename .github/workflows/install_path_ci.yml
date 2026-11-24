@@ -1,0 +1,135 @@
+# Copyright (c) ONNX Project Contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+# Install path check (#2504, #2503 DoD 1).
+#
+# The unit-test lanes install pinned onnx/onnxruntime versions step by step,
+# so they never see what a user gets from a fresh install. This lane builds
+# tf2onnx from the commit under test and installs it next to each TensorFlow
+# version in one command, as #2504 recommends:
+#
+#   pip install "tensorflow==<version>.*" tf2onnx
+#
+# so pip resolves onnx, numpy, protobuf and ml_dtypes from tf2onnx's metadata.
+# It then imports tensorflow, onnx and tf2onnx and converts a small function
+# (steps in .github/actions/install_path). Because dependencies come from PyPI
+# at run time, the weekly schedule also catches a new upstream release that
+# breaks the install (as onnx 1.19.0 did on TF 2.14-2.17) between PRs.
+#
+# GitHub only notifies the last person who edited the cron line about
+# scheduled failures, so on the schedule the `notify` job opens or updates an
+# issue that mentions the maintainers in NOTIFY, and closes it once the
+# required jobs pass again.
+#
+# A manual run can install a tf2onnx release from PyPI instead of building
+# this commit (input `tf2onnx_spec`), e.g. to check a release candidate.
+
+name: Install Path
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths-ignore:
+      - '**.md'
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - '**.md'
+  schedule:
+    - cron: '41 5 * * 1'
+  workflow_dispatch:
+    inputs:
+      tf2onnx_spec:
+        description: 'Install tf2onnx from PyPI instead of building this commit, e.g. "tf2onnx==1.17.1rc1". Leave empty to test this commit.'
+        required: false
+        default: ''
+        type: string
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}-${{ github.event_name == 'workflow_dispatch' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  required:
+    name: fresh install (TF ${{ matrix.tf_version }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        # TF versions of the required unit-test matrix.
+        tf_version: ['2.13', '2.15']
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: $/.github/actions/install_path
+        with:
+          tf_version: ${{ matrix.tf_version }}
+          tf2onnx_spec: ${{ inputs.tf2onnx_spec }}
+
+  advisory:
+    # Newer TF versions users install today. Advisory until the
+    # supported-version policy in #2486 is settled; `notify` does not watch them.
+    name: fresh install (TF ${{ matrix.tf_version }}, advisory)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        tf_version: ['2.17', '2.20']
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: $/.github/actions/install_path
+        with:
+          tf_version: ${{ matrix.tf_version }}
+          tf2onnx_spec: ${{ inputs.tf2onnx_spec }}
+
+  notify:
+    name: notify maintainers (scheduled run)
+    needs: required
+    # always(): also run when a required job failed, timed out or was cancelled.
+    if: always() && github.event_name == 'schedule'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      issues: write  # open, comment on or close the tracking issue
+    steps:
+      - name: Open, update or close the tracking issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          RESULT: ${{ needs.required.result }}
+          NOTIFY: '@andife @ryol8888'
+          TITLE: 'Install path lane failed on the weekly run'
+        run: |
+          number=$(gh issue list --state open --search "in:title \"${TITLE}\"" --json number,title \
+            --jq "map(select(.title == \"${TITLE}\")) | .[0].number // empty")
+          if [ "${RESULT}" = "success" ]; then
+            if [ -n "${number}" ]; then
+              gh issue close "${number}" --comment "The scheduled install-path check passes again: ${RUN_URL}"
+            fi
+            exit 0
+          fi
+          body="The scheduled install-path check did not pass (required jobs: ${RESULT}): ${RUN_URL}
+
+          See the failed step's log. If pip install itself succeeded, the job summary lists the resolved tensorflow / onnx / numpy / protobuf / ml_dtypes versions.
+
+          cc ${NOTIFY}"
+          if [ -n "${number}" ]; then
+            gh issue comment "${number}" --body "${body}"
+          else
+            gh issue create --title "${TITLE}" --body "${body}"
+          fi
