@@ -28,7 +28,8 @@ __Note: tensorflow.js support is experimental. While we tested it with many tfjs
 
 TensorFlow has many more ops than ONNX and occasionally mapping a model to ONNX creates issues.
 
-You find a list of supported TensorFlow ops and their mapping to ONNX [here](support_status.md).
+The generated [operator handler coverage](support_status.md) lists TensorFlow operators with registered ONNX
+conversion handlers. It is an implementation inventory rather than a guarantee that every model will convert.
 
 The common issues we run into we try to document here [Troubleshooting Guide](Troubleshooting.md).
 

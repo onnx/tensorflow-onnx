@@ -34,3 +34,9 @@ jobs:
 
       - name: Run ruff
         run: ruff check tf2onnx tests/*.py tools
+
+      - name: Verify generated support status
+        run: |
+          python -m unittest tools/test_gen_doc.py
+          python tools/gen_doc.py "$RUNNER_TEMP/support_status.md"
+          diff -u support_status.md "$RUNNER_TEMP/support_status.md"
