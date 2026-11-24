@@ -36,8 +36,8 @@ The common issues we run into we try to document here [Troubleshooting Guide](Tr
 
 | Build Type | OS | Python | TensorFlow | ONNX opset |
 | ---        | -  | ---    | ---        | ---        |
-| Unit Test - Basic | Linux, Windows | 3.10-3.12 | 2.13-2.15 | 14-18 |
-| Unit Test - Full | Linux, Windows | 3.10-3.12 | 2.13-2.15 | 14-18 | 
+| Unit Test - Basic | Linux, Windows | 3.10-3.12 | 2.13-2.15 | 15, 18-21 (19-21: Linux) |
+| Unit Test - Full | Linux, Windows | 3.10-3.12 | 2.13-2.15 | 15, 18-21 (19-21: Linux) | 
 <br/>
 
 ## Supported Versions
@@ -46,7 +46,7 @@ The common issues we run into we try to document here [Troubleshooting Guide](Tr
 
 tf2onnx will use the ONNX version installed on your system and installs the latest ONNX version if none is found.
 
-We support and test ONNX opset-14 to opset-18. opset-6 to opset-13 should work but we don't test them.
+CI tests ONNX opset-15 and opset-18 on Linux and Windows and opset-19 to opset-21 on Linux on every pull request, and opset-22 on Linux as an advisory job (onnxruntime has no opset-22 kernel yet for a few ops). opset-6 to opset-14, opset-16 and opset-17 should work but we don't test them.
 By default we use ```opset-15``` for the resulting ONNX graph.
 
 If you want the graph to be generated with a specific opset, use ```--opset``` in the command line, for example ```--opset 15```.
