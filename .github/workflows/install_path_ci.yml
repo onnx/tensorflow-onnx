@@ -70,7 +70,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: ./.github/actions/install_path
+      - uses: $/.github/actions/install_path
         with:
           tf_version: ${{ matrix.tf_version }}
           tf2onnx_spec: ${{ inputs.tf2onnx_spec }}
@@ -91,7 +91,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: ./.github/actions/install_path
+      - uses: $/.github/actions/install_path
         with:
           tf_version: ${{ matrix.tf_version }}
           tf2onnx_spec: ${{ inputs.tf2onnx_spec }}
