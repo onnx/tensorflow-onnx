@@ -29,10 +29,24 @@ class _BlockTensorFlow(importlib.abc.MetaPathFinder):
 sys.meta_path.insert(0, _BlockTensorFlow())
 
 import tf2onnx
-import tf2onnx.graph
+from onnx import TensorProto, helper
 from tf2onnx import logging
+from tf2onnx.graph import GraphUtil
 
 logging.set_level(logging.INFO)  # also reaches set_tf_verbosity()
+
+# The ONNX-side optimizer must run too: two chained Identity nodes collapse to one.
+graph = helper.make_graph(
+    [helper.make_node("Identity", ["x"], ["mid"], name="identity_1"),
+     helper.make_node("Identity", ["mid"], ["y"], name="identity_2")],
+    "identity_chain",
+    [helper.make_tensor_value_info("x", TensorProto.FLOAT, [2, 3])],
+    [helper.make_tensor_value_info("y", TensorProto.FLOAT, [2, 3])],
+)
+model = helper.make_model(graph, opset_imports=[helper.make_opsetid("", 15)])
+optimized = GraphUtil.optimize_model_proto(model, catch_errors=False)
+counts = GraphUtil.get_node_count_from_onnx_graph(optimized.graph)
+assert counts.get("Identity") == 1, counts
 
 loaded = sorted(m for m in sys.modules if m == "tensorflow" or m.startswith("tensorflow."))
 assert not loaded, loaded
