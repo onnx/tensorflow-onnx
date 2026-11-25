@@ -4,6 +4,9 @@ import os
 import sys
 import unittest
 
+import numpy as np
+
+
 def _log_memory(label):
     try:
         with open('/proc/self/status') as f:
@@ -56,6 +59,26 @@ ZeroPadding2D = keras.layers.ZeroPadding2D
 
 Sequential = keras.models.Sequential
 Model = keras.models.Model
+
+
+def _fill_batchnorm_statistics(model, target_size):
+    """Set every BatchNormalization layer's moving mean/variance from the test image.
+
+    With the default statistics (mean 0, variance 1) float32 Keras itself drifts from a float64 run of
+    the randomly initialised SE-ResNeXt by up to ~16% of the logit scale, so Keras and onnxruntime can
+    pick different classes. The plain ResNeXt does not drift although its activations grow just as
+    large; which SE op causes it was not isolated. Real statistics keep the drift near 1e-6.
+    """
+    image = keras.preprocessing.image
+    img = image.load_img(img_path, color_mode="rgb", target_size=(target_size, target_size))
+    x = keras.applications.imagenet_utils.preprocess_input(np.expand_dims(image.img_to_array(img), axis=0))
+    bn_layers = [layer for layer in model.layers if isinstance(layer, BatchNormalization)]
+    momenta = [layer.momentum for layer in bn_layers]
+    for layer in bn_layers:
+        layer.momentum = 0.0  # one training-mode pass overwrites the statistics
+    model(x, training=True)
+    for layer, momentum in zip(bn_layers, momenta):
+        layer.momentum = momentum
 
 
 def initial_conv_block(input, weight_decay=5e-4):
@@ -395,8 +418,9 @@ class TestResNext(unittest.TestCase):
         inputs = img_input
 
         keras_model = Model(inputs, x, name='se_resnext')
+        _fill_batchnorm_statistics(keras_model, target_size=112)
         _log_memory("test_SEResNext model built")
-        res = run_image(keras_model, self.model_files, img_path, atol=5e-3, target_size=112)
+        res = run_image(keras_model, self.model_files, img_path, target_size=112)
         _log_memory("test_SEResNext run_image done")
         self.assertTrue(*res)
 
