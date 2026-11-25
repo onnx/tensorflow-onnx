@@ -10,8 +10,6 @@ import os
 from contextlib import contextmanager
 from typing import Iterator, Optional
 
-import tensorflow as tf
-
 from . import constants
 
 
@@ -115,10 +113,12 @@ def set_level(level: int) -> None:
 def set_tf_verbosity(level: int) -> None:
     """Control TensorFlow logging verbosity (TF ≥ 2.x)."""
 
-    # TensorFlow Python logging (guard against lazy-loader stubs on Windows)
+    # TensorFlow Python logging. Imported here, not at module level, so that `import tf2onnx`
+    # works without TensorFlow (#2532). AttributeError guards against lazy-loader stubs on Windows.
     try:
+        import tensorflow as tf  # pylint: disable=import-outside-toplevel
         tf.get_logger().setLevel(level)
-    except AttributeError:
+    except (ImportError, AttributeError):
         pass
 
     # C++ backend logging
