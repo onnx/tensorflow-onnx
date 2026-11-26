@@ -188,9 +188,9 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           # tensorflow and onnxruntime are required even though this test never
-          # runs a model: tf2onnx imports tensorflow unconditionally at package
-          # init (verbose_logging), and tests/conftest.py pulls in onnxruntime
-          # via TestConfig._get_backend_version(), so the guard cannot collect
+          # runs a model: tests/conftest.py imports tests/common.py, which imports
+          # tensorflow, and pulls in onnxruntime via
+          # TestConfig._get_backend_version(), so the guard cannot collect
           # without either. Versions are pinned to keep the job deterministic.
           pip install "numpy<2" onnx==1.16.1 onnxruntime==1.16.3 flatbuffers packaging parameterized pytest tensorflow==2.15.0
           pip install -e .

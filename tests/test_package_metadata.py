@@ -4,6 +4,7 @@
 """Checks on the dependencies tf2onnx declares in its package metadata."""
 
 import ast
+import importlib.util
 import os
 import sys
 import unittest
@@ -63,6 +64,14 @@ def _imported_top_level_modules():
 
 
 class PackageMetadataTests(unittest.TestCase):
+
+    def test_version_module_matches_distribution_metadata(self):
+        path = os.path.join(TF2ONNX_DIR, "version.py")
+        spec = importlib.util.spec_from_file_location("tf2onnx_version", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        self.assertEqual(module.version, metadata.version("tf2onnx"))
 
     def test_onnx_requirement_skips_broken_release(self):
         spec = _declared_requirements()["onnx"].specifier
