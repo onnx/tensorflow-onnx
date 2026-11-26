@@ -46,6 +46,16 @@ jobs:
           - tf_version: '2.13.0'
             python_version: '3.13'
         include:
+          # One stable lane owns the project-wide coverage floor. The latest
+          # successful main run reports 68%, so this prevents regressions
+          # without making coverage depend on every matrix combination.
+          - os: 'ubuntu-24.04'
+            tf_version: '2.15.0'
+            python_version: '3.11'
+            opset_version: '18'
+            onnx_version: '1.16.1'
+            ort_version: '1.16.3'
+            coverage_fail_under: '68'
           # --- newer-opset coverage (onnx 1.17) -------------------------------
           # The full backend suite converts real ops/models and runs them through
           # onnxruntime, so these exercise opset 19-22 end-to-end. onnxruntime
@@ -149,6 +159,7 @@ jobs:
           opset_version: ${{ matrix.opset_version }}
           skip_tflite: 'False'
           pip_check: ${{ matrix.pip_check || false }}
+          coverage_fail_under: ${{ matrix.coverage_fail_under || 0 }}
       - name: Upload Test Results
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
