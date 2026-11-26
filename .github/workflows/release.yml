@@ -38,8 +38,40 @@ jobs:
       - name: Install packaging tools
         run: python -m pip install build twine
 
+      - name: Set reproducible build timestamp
+        run: echo "SOURCE_DATE_EPOCH=$(git log -1 --pretty=%ct)" >> "$GITHUB_ENV"
+
       - name: Build wheel and sdist
-        run: python -m build
+        run: |
+          python -m build --outdir dist
+          python tools/normalize_sdist.py dist/*.tar.gz
+
+      - name: Verify reproducible artifacts
+        run: |
+          python -m build --outdir dist-rebuilt
+          python tools/normalize_sdist.py dist-rebuilt/*.tar.gz
+          python - <<'PY'
+          import hashlib
+          import pathlib
+
+          def hashes(directory):
+              return {
+                  artifact.name: hashlib.sha256(artifact.read_bytes()).hexdigest()
+                  for artifact in pathlib.Path(directory).iterdir()
+                  if artifact.is_file()
+              }
+
+          first = hashes("dist")
+          second = hashes("dist-rebuilt")
+          assert first.keys() == second.keys(), (first.keys(), second.keys())
+          assert first == second, {
+              name: (first[name], second[name])
+              for name in first
+              if first[name] != second[name]
+          }
+          for name, digest in sorted(first.items()):
+              print(f"{digest}  {name}")
+          PY
 
       - name: Check distribution metadata
         run: python -m twine check dist/*
