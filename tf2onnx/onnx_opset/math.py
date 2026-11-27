@@ -564,16 +564,22 @@ class CumProd:
         # opset 10 required for Slice to support starts/ends/axes/steps as inputs
         axis_node = node.inputs[1]
         is_axis_const = axis_node.is_const()
+        input_rank = len(ctx.get_shape(node.input[0]))
         if is_axis_const: # we can compute axis value right now
             axis = axis_node.get_tensor_value()
+            if axis < 0:
+                axis += input_rank
             axis_node = ctx.make_const(utils.make_name("axis"), np.array([axis], dtype=np.int64))
         else:
             axis_node = ctx.make_node("Cast", inputs=[axis_node.output[0]], attr={"to": onnx_pb.TensorProto.INT64},
                                       op_name_scope=node.name, outputs=[utils.make_name("axis")])
             axis_node = GraphBuilder(ctx).make_unsqueeze({'data': axis_node.output[0], 'axes': [0]}, return_node=True)
+            # map a negative axis to its positive equivalent
+            rank_node = ctx.make_const(utils.make_name("rank"), np.array([input_rank], dtype=np.int64))
+            axis_node = ctx.make_node("Mod", inputs=[axis_node.output[0], rank_node.output[0]],
+                                      op_name_scope=node.name, outputs=[utils.make_name("axis")])
             axis = axis_node.output[0]
 
-        input_rank = len(ctx.get_shape(node.input[0]))
         cond_true_node = ctx.make_const(utils.make_name("cond_in"), np.ones((), dtype=bool))
         input_shape_node = ctx.make_node("Shape", inputs=[node.input[0]], op_name_scope=node.name,
                                          outputs=[utils.make_name("input_shape")])
