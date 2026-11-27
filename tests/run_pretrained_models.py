@@ -72,7 +72,7 @@ def get_beach(shape):
 
 def get_beach_uint8(shape):
     """Get beach image as uint8."""
-    return get_img(shape, "ade20k.jpg", np.uint8, should_scale=False)
+    return get_img(shape, "truck.jpg", np.uint8, should_scale=False)
 
 
 def get_car(shape):
@@ -81,13 +81,13 @@ def get_car(shape):
 
 
 def get_ade20k(shape):
-    """Get truck image from ade20k segmentation dataset."""
-    return get_img(shape, "ade20k.jpg", np.float32, should_scale=True)
+    """Get truck image as input."""
+    return get_img(shape, "truck.jpg", np.float32, should_scale=True)
 
 
 def get_ade20k_uint8(shape):
-    """Get truck image from ade20k segmentation dataset."""
-    return get_img(shape, "ade20k.jpg", np.uint8, should_scale=False)
+    """Get truck image as input."""
+    return get_img(shape, "truck.jpg", np.uint8, should_scale=False)
 
 
 def get_random(shape):
