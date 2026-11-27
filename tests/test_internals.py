@@ -287,6 +287,9 @@ class Tf2OnnxInternalTests(Tf2OnnxBackendTestBase):
         # opset 7/8 shipped with IR3 but tf2onnx needs IR4 for PlaceholderWithDefault.
         self.assertEqual(constants.OPSET_TO_IR_VERSION[7], 4)
         self.assertEqual(constants.OPSET_TO_IR_VERSION[8], 4)
+        # The keras2onnx default stays at the table-backed maximum even when
+        # newer registry-only opsets are added to OPSET_TO_IR_VERSION.
+        self.assertEqual(constants.MAX_TABLE_OPSET, max(row[2] for row in helper.VERSION_TABLE))
         # every opset the installed onnx package knows about must be mapped.
         self.assertIn(defs.onnx_opset_version(), constants.OPSET_TO_IR_VERSION)
         # no regression for the previously hand-maintained entries.

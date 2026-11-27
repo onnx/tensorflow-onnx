@@ -65,14 +65,11 @@ OPSET_TO_IR_VERSION = {opset: ir_version for _, ir_version, opset, *_ in helper.
 #   * opsets 7 and 8 shipped with IR3, but tf2onnx emits PlaceholderWithDefault
 #     which requires IR4, so they are pinned to 4 rather than the table's value.
 OPSET_TO_IR_VERSION.update({1: 3, 2: 3, 3: 3, 4: 3, 5: 3, 6: 3, 7: 4, 8: 4})
-# The installed onnx package's op-def registry can support opsets ahead of the
-# highest row in VERSION_TABLE: a new opset lands in defs before the table
-# gains a row for it at release time. Backfill those with the package's
-# current IR version so tf2onnx keeps working against such (pre-release) onnx
-# builds instead of rejecting an opset the installed package actually knows.
-# MAX_RELEASED_OPSET keeps the pre-backfill maximum so defaults never pick an
-# unreleased opset; the backfilled entries only serve an explicitly requested one.
-MAX_RELEASED_OPSET = max(OPSET_TO_IR_VERSION)
+# The installed onnx package's op-def registry can know opsets newer than the
+# highest row in its VERSION_TABLE. Capture the table-backed maximum before
+# backfilling those registry-only entries: keras2onnx uses it as its default,
+# while backfilled opsets remain available when requested explicitly.
+MAX_TABLE_OPSET = max(OPSET_TO_IR_VERSION)
 _current_opset = defs.onnx_opset_version()
-if _current_opset > MAX_RELEASED_OPSET:
-    OPSET_TO_IR_VERSION.update({op: onnx.IR_VERSION for op in range(MAX_RELEASED_OPSET + 1, _current_opset + 1)})
+if _current_opset > MAX_TABLE_OPSET:
+    OPSET_TO_IR_VERSION.update({op: onnx.IR_VERSION for op in range(MAX_TABLE_OPSET + 1, _current_opset + 1)})
