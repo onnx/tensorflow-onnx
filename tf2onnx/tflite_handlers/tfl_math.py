@@ -212,7 +212,7 @@ class TflFullyConnectedOp:
             shape_const = ctx.make_const(utils.make_name("reshape_shape"), np.array([-1, weights_shape], np.int64))
             reshape_node = ctx.make_node("Reshape", [node.input[0], shape_const.output[0]])
             reshape_node.skip_conversion = True
-            ctx.replace_inputs(node, [reshape_node.output[0], node.input[1]])
+            ctx.replace_inputs(node, [reshape_node.output[0]] + node.input[1:])
 
         transpose_node = ctx.insert_new_node_on_input(node, "Transpose", node.input[1],
                                                       name=None, input_index=1, perm=[1, 0])
@@ -222,7 +222,6 @@ class TflFullyConnectedOp:
         node.type = "MatMul"
 
         if len(node.input) == 3:
-            # FIXME: Add a test for this
             bias_inp = node.input[2]
             ctx.replace_inputs(node, node.input[:2])
             add_node = ctx.insert_new_node_on_output("Add", node.output[0], inputs=[node.output[0], bias_inp])
