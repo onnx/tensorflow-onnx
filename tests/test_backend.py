@@ -1183,6 +1183,18 @@ class BackendTests(Tf2OnnxBackendTestBase):
             return tf.identity(x_, name=_TFOUTPUT)
         self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
 
+    @check_opset_min_version(11, "Equal")
+    def test_log1p(self):
+        # tiny values are where log(1 + x) would round to 0
+        values = [0.0, 1e-30, -1e-30, 1e-10, -1e-10, 1e-8, 1e-4, 0.5, -0.5, -1.0, 1.0, 10.0, 1e6, 3e7, 1e30,
+                  np.inf, -1.5, np.nan]
+        for dtype in [np.float32, np.float64]:
+            x_val = np.array(values, dtype=dtype)
+            def func(x):
+                x_ = tf.math.log1p(x)
+                return tf.identity(x_, name=_TFOUTPUT)
+            self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-6, atol=0)
+
     @check_onnxruntime_incompatibility("Log")
     def test_log_double(self):
         x_val = np.array([1.0, 2.0, 3.0, 4.0], dtype=np.float64).reshape((2, 2))
@@ -2183,6 +2195,14 @@ class BackendTests(Tf2OnnxBackendTestBase):
                 x_ = tf.reduce_max(x, axis=[2, 3, 4], keepdims=keepdims)
                 return tf.add(x_, 0, name=_TFOUTPUT)
             self._run_test_case(func, [_OUTPUT], {_INPUT: x_val})
+
+    def test_euclidean_norm(self):
+        x_val = np.random.uniform(-2, 2, size=(2, 3, 4)).astype(np.float32)
+        for axis, keepdims in [(None, False), (1, False), (-1, True), ([0, 2], False), ([0, -1], True)]:
+            def func(x):
+                x_ = tf.math.reduce_euclidean_norm(x, axis=axis, keepdims=keepdims)
+                return tf.identity(x_, name=_TFOUTPUT)
+            self._run_test_case(func, [_OUTPUT], {_INPUT: x_val}, rtol=1e-6)
 
     @skip_caffe2_backend()
     def test_reduceprod(self):

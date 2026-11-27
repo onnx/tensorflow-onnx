@@ -72,6 +72,7 @@
 | EnsureShape | 1 ~ 18 |
 | Equal | 1 ~ 18 |
 | Erf | 1 ~ 18 |
+| EuclideanNorm | 1 ~ 18 |
 | Exp | 1 ~ 18 |
 | ExpandDims | 1 ~ 18 |
 | FFT | 1 ~ 18 |
@@ -110,6 +111,7 @@
 | Less | 1 ~ 18 |
 | LessEqual | 7 ~ 18 |
 | Log | 1 ~ 18 |
+| Log1p | 11 ~ 18 |
 | LogSoftmax | 1 ~ 18 |
 | LogicalAnd | 1 ~ 18 |
 | LogicalNot | 1 ~ 18 |

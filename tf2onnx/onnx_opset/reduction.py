@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 
 # pylint: disable=unused-argument,missing-docstring,protected-access
 
+@tf_op("EuclideanNorm", onnx_op="ReduceL2")
 @tf_op("Max", onnx_op="ReduceMax")
 @tf_op("Mean", onnx_op="ReduceMean")
 @tf_op("Min", onnx_op="ReduceMin")
