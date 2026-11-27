@@ -19,6 +19,9 @@ We are looking to **expand our maintainer team** to help support and evolve the 
 
 If you're passionate about the ONNX standard or contributing to the open source machine learning ecosystem, we'd love to hear from you! This is a great opportunity to contribute to a widely used project and collaborate with the ONNX community.
 
+**How to get started:**
+You don't need any special rights to help. Anyone can work on open topics, triage and answer issues, review pull requests, and submit changes for approval. Under the [ONNX governance rules](https://github.com/onnx/onnx/blob/main/community/readme.md#approvers), approver rights come later: approvers need to have been active Contributors for at least 3 months and be sponsored by a SIG chair. Contributing regularly is the way onto the maintainer team.
+
 **To express interest:**
 Please [open an issue](https://github.com/onnx/tensorflow-onnx/issues/new) and let us know about your interest and background.
 
