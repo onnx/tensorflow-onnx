@@ -1,4 +1,6 @@
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: Copyright (c) 2021 Somshubra Majumdar
+# SPDX-FileCopyrightText: Copyright (c) 2019 Somshubra Majumdar
+# SPDX-License-Identifier: Apache-2.0 AND MIT
 
 import os
 import sys

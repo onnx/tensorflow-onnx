@@ -25,3 +25,35 @@ path = ["tools/gen_doc.py", "tools/gen_tflite_flatbuffer.py"]
 precedence = "override"
 SPDX-FileCopyrightText = "Copyright (c) ONNX Project Contributors"
 SPDX-License-Identifier = "Apache-2.0"
+
+# Test images from Wikimedia Commons, dedicated to the public domain under
+# CC0-1.0 by their authors. They were cropped and resized for the tests.
+# These annotations come after the "**" annotation, so they replace the
+# project copyright and license for these files.
+[[annotations]]
+# https://commons.wikimedia.org/wiki/File:Parasols,_Evening,_Beach,_Rincon_de_la_Victoria,_Andalusia,_Spain.jpg
+path = "tests/beach.jpg"
+precedence = "override"
+SPDX-FileCopyrightText = "2014 Jebulon"
+SPDX-License-Identifier = "CC0-1.0"
+
+[[annotations]]
+# https://commons.wikimedia.org/wiki/File:On-street-parked-car-free2move.jpg
+path = "tests/car.JPEG"
+precedence = "override"
+SPDX-FileCopyrightText = "2026 Textlover78"
+SPDX-License-Identifier = "CC0-1.0"
+
+[[annotations]]
+# https://commons.wikimedia.org/wiki/File:Road_maintenance_truck_in_Ebisu.jpg
+path = "tests/truck.jpg"
+precedence = "override"
+SPDX-FileCopyrightText = "2023 Syced"
+SPDX-License-Identifier = "CC0-1.0"
+
+[[annotations]]
+# https://commons.wikimedia.org/wiki/File:Recife_Favela_Detran_street.jpg
+path = "tests/keras2onnx_applications/data/street.jpg"
+precedence = "override"
+SPDX-FileCopyrightText = "Wilfredor"
+SPDX-License-Identifier = "CC0-1.0"

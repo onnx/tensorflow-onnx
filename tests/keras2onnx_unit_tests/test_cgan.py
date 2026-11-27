@@ -1,4 +1,5 @@
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: Copyright (c) 2017 Erik Linder-Norén
+# SPDX-License-Identifier: Apache-2.0 AND MIT
 
 import mock_keras2onnx
 import numpy as np

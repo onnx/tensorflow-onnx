@@ -1,4 +1,5 @@
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: Copyright (c) 2020 Dimsmary
+# SPDX-License-Identifier: Apache-2.0 AND MIT
 
 import os
 import sys

@@ -1,4 +1,5 @@
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: Copyright (c) 2005-2026, NumPy Developers.
+# SPDX-License-Identifier: Apache-2.0 AND BSD-3-Clause
 
 
 """Unit Tests for einsum decomposition."""
