@@ -37,6 +37,17 @@ You are ready to sign your code by using the `-s` flag during your commits.
 git commit -s
 ```
 
+The repository follows the [REUSE specification](https://reuse.software/spec/).
+Every file must have copyright and license information. Most files get it from
+`REUSE.toml`; files from other projects need their own notice. Run the same
+check as CI when you add, rename, or copy in files, or change licensing or
+attribution:
+
+```sh
+python -m pip install reuse==6.3.0
+reuse lint
+```
+
 
 # Code of conduct
 This project has adopted the [ONNX Code of Conduct](https://onnx.ai/codeofconduct.html).

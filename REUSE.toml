@@ -1,0 +1,27 @@
+# Copyright (c) ONNX Project Contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+version = 1
+SPDX-PackageName = "tensorflow-onnx"
+SPDX-PackageSupplier = "onnx-technical-discuss@lists.lfaidata.foundation"
+SPDX-PackageDownloadLocation = "https://github.com/onnx/tensorflow-onnx"
+
+# Most source files already carry an SPDX license identifier. This aggregate
+# annotation covers every file in the repository, supplies the project
+# copyright, and covers files that cannot contain comments. With aggregate
+# precedence, more specific notices in individual files are kept.
+[[annotations]]
+path = "**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "Copyright (c) ONNX Project Contributors"
+SPDX-License-Identifier = "Apache-2.0"
+
+# These scripts contain SPDX header text as data for the files they generate.
+# Override content scanning so those strings are not interpreted as malformed
+# license expressions for the scripts themselves.
+[[annotations]]
+path = ["tools/gen_doc.py", "tools/gen_tflite_flatbuffer.py"]
+precedence = "override"
+SPDX-FileCopyrightText = "Copyright (c) ONNX Project Contributors"
+SPDX-License-Identifier = "Apache-2.0"
