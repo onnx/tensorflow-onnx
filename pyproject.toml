@@ -56,8 +56,17 @@ test = [
 
 [project.urls]
 Homepage = "https://github.com/onnx/tensorflow-onnx"
+Repository = "https://github.com/onnx/tensorflow-onnx"
+
+[project.scripts]
+tf2onnx = "tf2onnx.convert:main"
+
+[tool.setuptools.dynamic]
+version = { file = ["VERSION_NUMBER"] }
 
 [tool.setuptools.packages.find]
+include = ["tf2onnx*"]
+namespaces = false
 
 [tool.pytest.ini_options]
 addopts = "--cov=tf2onnx"
@@ -84,7 +93,6 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tf2onnx/version.py" = ["E", "F", "W", "I"]
 "tf2onnx/tflite*" = ["E", "F", "W", "I"]
 # Probe import used only to test availability of the optional package
 "tests/common.py" = ["F401", "I001"]

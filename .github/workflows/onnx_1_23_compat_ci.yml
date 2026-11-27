@@ -47,17 +47,14 @@ jobs:
         run: |
           python - <<'PY'
           import sys
-          import types
 
           from onnx import TensorProto, checker, defs, helper
 
-          # tf2onnx's optimizer/graph path does not use TensorFlow, but package
-          # initialization imports verbose_logging.py, whose only module-level
-          # TensorFlow dependency is the import itself. Stub that module so this
-          # lane proves the optimizer path stays usable without a TF install.
-          sys.modules["tensorflow"] = types.ModuleType("tensorflow")
-
+          # TensorFlow is not installed in this lane: importing tf2onnx and its
+          # optimizer/graph path must not need it (#2532).
           from tf2onnx.graph import GraphUtil
+
+          assert "tensorflow" not in sys.modules
 
           latest_opset = defs.onnx_opset_version()
 

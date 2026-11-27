@@ -36,8 +36,8 @@ The common issues we run into we try to document here [Troubleshooting Guide](Tr
 
 | Build Type | OS | Python | TensorFlow | ONNX opset |
 | ---        | -  | ---    | ---        | ---        |
-| Unit Test - Basic | Linux, Windows | 3.10-3.12 | 2.13-2.15 | 14-18 |
-| Unit Test - Full | Linux, Windows | 3.10-3.12 | 2.13-2.15 | 14-18 | 
+| Unit Test - Basic | Linux, Windows | 3.10-3.12 | 2.13-2.15 | 15, 18-21 (19-21: Linux) |
+| Unit Test - Full | Linux, Windows | 3.10-3.12 | 2.13-2.15 | 15, 18-21 (19-21: Linux) | 
 <br/>
 
 ## Supported Versions
@@ -46,7 +46,7 @@ The common issues we run into we try to document here [Troubleshooting Guide](Tr
 
 tf2onnx will use the ONNX version installed on your system and installs the latest ONNX version if none is found.
 
-We support and test ONNX opset-14 to opset-18. opset-6 to opset-13 should work but we don't test them.
+CI tests ONNX opset-15 and opset-18 on Linux and Windows and opset-19 to opset-21 on Linux on every pull request, and opset-22 on Linux as an advisory job (onnxruntime has no opset-22 kernel yet for a few ops). opset-6 to opset-14, opset-16 and opset-17 should work but we don't test them.
 By default we use ```opset-15``` for the resulting ONNX graph.
 
 If you want the graph to be generated with a specific opset, use ```--opset``` in the command line, for example ```--opset 15```.
@@ -91,17 +91,18 @@ ONNX Runtime (available for Linux, Windows, and Mac):
 
 Once dependencies are installed, from the tensorflow-onnx folder call:
 
-```python setup.py install```
+```
+python -m pip install -e .
+```
 
-or
+tensorflow-onnx requires onnx-1.14 or better and will install/upgrade onnx if needed.
 
-```python setup.py develop```
+To create a wheel and source distribution:
 
-tensorflow-onnx requires onnx-1.9 or better and will install/upgrade onnx if needed.
-
-To create a wheel for distribution:
-
-```python setup.py bdist_wheel```
+```
+python -m pip install build
+python -m build
+```
 
 ## Getting started
 
@@ -111,6 +112,10 @@ To get started with `tensorflow-onnx`, run the `tf2onnx.convert` command, provid
 * a name for the ONNX output file:
 
 ```python -m tf2onnx.convert --saved-model tensorflow-model-path --output model.onnx```
+
+The installed `tf2onnx` command is an equivalent shorthand:
+
+```tf2onnx --saved-model tensorflow-model-path --output model.onnx```
 
 The above command uses a default of `15` for the ONNX opset. If you need a newer opset, or want to limit your model to use an older opset then you can provide the `--opset` argument to the command. If you are unsure about which opset to use, refer to the [ONNX operator documentation](https://github.com/onnx/onnx/releases).
 
@@ -278,7 +283,7 @@ There are 2 types of tests.
 
 ### Unit test
 ```
-python setup.py test
+python -m pytest
 ```
 
 ### Validate pre-trained TensorFlow models

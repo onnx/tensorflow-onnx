@@ -30,9 +30,9 @@ echo "==== numpy spec: $NUMPY_SPEC"
 pip install "$NUMPY_SPEC" "ml_dtypes<0.6.0" onnx==$ONNX_VERSION onnxruntime==$ORT_VERSION onnxruntime-extensions
 # Re-assert NUMPY_SPEC on every subsequent install: each `pip install` is an
 # independent resolution, so an unpinned transitive numpy requirement in any
-# later package (tensorflow, pandas, tf2onnx itself, ...) can silently
+# later package (tensorflow, tf2onnx itself, ...) can silently
 # upgrade numpy past what the first command settled on.
-pip install "$NUMPY_SPEC" pytest pytest-cov pytest-runner coverage graphviz requests pyyaml pillow pandas parameterized sympy coloredlogs flatbuffers timeout-decorator
+pip install "$NUMPY_SPEC" pytest pytest-cov pytest-runner coverage graphviz requests pyyaml pillow parameterized sympy coloredlogs flatbuffers timeout-decorator
 pip install "$NUMPY_SPEC" tensorflow==$TF_VERSION
 
 pip install "$NUMPY_SPEC" -e .
