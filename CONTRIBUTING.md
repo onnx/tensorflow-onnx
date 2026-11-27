@@ -38,10 +38,13 @@ git commit -s
 ```
 
 The repository follows the [REUSE specification](https://reuse.software/spec/).
-Before submitting licensing or attribution changes, run:
+Every file must have copyright and license information. Most files get it from
+`REUSE.toml`; files from other projects need their own notice. Run the same
+check as CI when you add, rename, or copy in files, or change licensing or
+attribution:
 
 ```sh
-python -m pip install "reuse>=6.2,<7"
+python -m pip install reuse==6.3.0
 reuse lint
 ```
 
