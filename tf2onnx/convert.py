@@ -343,7 +343,10 @@ def tensor_names_from_structed(concrete_func, input_names, output_names):
     tensors_to_rename.update(zip(input_names, structured_inputs))
     if isinstance(concrete_func.structured_outputs, dict):
         for k, v in concrete_func.structured_outputs.items():
-            tensors_to_rename[v.name] = k
+            if isinstance(v, tf.RaggedTensor):
+                tensors_to_rename[v.flat_values.name] = k
+            else:
+                tensors_to_rename[v.name] = k
     return tensors_to_rename
 
 
