@@ -19,6 +19,28 @@ logger = logging.getLogger(__name__)
 
 
 # pylint: disable=unused-argument,missing-docstring
+@tf_op("Xlogy")
+class Xlogy:
+    @classmethod
+    def version_1(cls, ctx, node, **kwargs):
+        x = node.input[0]
+        y = node.input[1]
+        
+        # Compute x * log(y)
+        log_y = ctx.make_node("Log", [y])
+        x_log_y = ctx.make_node("Mul", [x, log_y.output[0]])
+        
+        # Create zero constant matching x's dtype
+        dtype = ctx.get_dtype(x)
+        zero_val = np.array(0, dtype=utils.map_onnx_to_numpy_type(dtype))
+        zero_const = ctx.make_const(utils.make_name("zero"), zero_val)
+        
+        # If x == 0, return 0. Otherwise return x * log(y).
+        condition = ctx.make_node("Equal", [x, zero_const.output[0]])
+        node = ctx.make_node("Where", 
+                             [condition.output[0], zero_const.output[0], x_log_y.output[0]], 
+                             name=node.name)
+        return node.output
 
 @tf_op(["Add", "AddV2", "Div", "Mul", "Sub"])
 class BroadcastOp(common.BroadcastOp):
