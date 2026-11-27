@@ -278,7 +278,7 @@ def compute_const_folding_using_tf(g, const_node_values, graph_outputs):
                     progress = True
             can_fold = node.type not in ['Enter', 'Placeholder', 'PlaceholderWithDefault', 'Switch', 'Merge',
                                          'NextIteration', 'Exit', 'QuantizeAndDequantizeV2', 'QuantizeAndDequantizeV3',
-                                         'QuantizeAndDequantizeV4']
+                                         'QuantizeAndDequantizeV4', 'FakeQuantWithMinMaxVars']
             can_fold = can_fold and not node.type.startswith('Random')
             can_fold = can_fold and len(input_names) > 0 and all(inp in outputs_to_values for inp in input_names)
             # We can only fold nodes with a single output
