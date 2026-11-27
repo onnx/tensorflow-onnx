@@ -4316,6 +4316,19 @@ class BackendTests(Tf2OnnxBackendTestBase):
                             {_INPUT: input_x_val, _INPUT1: boxes_val, _INPUT2: box_ind_val, _INPUT3: corp_size_val},
                             rtol=1e-05, atol=1e-04)
 
+    @check_tf_min_version("1.9")
+    @check_opset_min_version(11, "CropAndResize")
+    def test_crop_and_resize_nearest_half_pixel(self):
+        # sampling points land exactly halfway between pixels, tensorflow rounds them up
+        def func(input_x, boxes, box_ind, corp_size):
+            return tf.image.crop_and_resize(input_x, boxes, box_ind, corp_size, name=_TFOUTPUT, method='nearest')
+        input_x_val = np.arange(2 * 6 * 6 * 2).reshape([2, 6, 6, 2]).astype(np.float32)  # NHWC
+        boxes_val = np.array([[0.0, 0.0, 1.0, 1.0], [0.2, 0.0, 0.8, 0.6]]).astype(np.float32)
+        box_ind_val = np.array([0, 1]).astype(np.int32)
+        corp_size_val = np.array([3, 4]).astype(np.int32)
+        self._run_test_case(func, [_OUTPUT],
+                            {_INPUT: input_x_val, _INPUT1: boxes_val, _INPUT2: box_ind_val, _INPUT3: corp_size_val})
+
     @check_opset_min_version(11, "CropAndResize")
     def test_crop_and_resize_extrapolation(self):
         def func(input_x, boxes, box_ind, corp_size):

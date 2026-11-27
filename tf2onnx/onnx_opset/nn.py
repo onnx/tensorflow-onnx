@@ -1323,10 +1323,14 @@ class CropAndResize:
         roi_concat_2 = g.make_node("Concat", [const_one_one.output[0], roi_raw_second_half], attr={'axis': 0})
         final_roi = g.make_node("Concat", [roi_concat_1.output[0], roi_concat_2.output[0]], attr={'axis': 0})
         final_crop_size = build_dynamic_target_size(g, transposed_x.output[0], crop_size)
+        resize_attr = {"mode": mode, "extrapolation_value": extrapolation_value,
+                       "coordinate_transformation_mode": "tf_crop_and_resize"}
+        if mode == "nearest":
+            # tensorflow uses roundf, which rounds halfway cases up for the (non-negative) in-bounds coordinates
+            resize_attr["nearest_mode"] = "round_prefer_ceil"
         resized_x = g.make_node("Resize", [transposed_x.output[0], final_roi.output[0], const_empty_float.output[0],
                                            final_crop_size.output[0]],
-                                attr={"mode": mode, "extrapolation_value": extrapolation_value,
-                                      "coordinate_transformation_mode": "tf_crop_and_resize"})
+                                attr=resize_attr)
         recovered_x = g.make_node("Transpose", [resized_x.output[0]], attr={'perm': constants.NCHW_TO_NHWC})
         squeeze_x = GraphBuilder(g).make_squeeze({'data': recovered_x.output[0], 'axes': [0]}, return_node=True)
         g.make_node("Identity", [cond_name], outputs=[cond_out_name])
