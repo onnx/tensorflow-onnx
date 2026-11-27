@@ -242,16 +242,22 @@ class SegmentSum():
             identity_value = np.array(1, dtype=data_np_dtype)
         elif node.type == "SegmentMax":
             onnx_op = "ReduceMax"
-            if data_is_float:
-                identity_value = np.array('-inf', dtype=data_np_dtype)
+            if not data_is_float:
+                identity_value = np.array(np.iinfo(data_np_dtype).min, dtype=data_np_dtype)
+            elif num_segments_specified:
+                # UnsortedSegmentMax outputs the lowest value of the dtype for empty segments
+                identity_value = np.array(np.finfo(data_np_dtype).min, dtype=data_np_dtype)
             else:
-                identity_value = np.iinfo(data_np_dtype).min
+                identity_value = np.array('-inf', dtype=data_np_dtype)
         elif node.type == "SegmentMin":
             onnx_op = "ReduceMin"
-            if data_is_float:
-                identity_value = np.array('inf', dtype=data_np_dtype)
+            if not data_is_float:
+                identity_value = np.array(np.iinfo(data_np_dtype).max, dtype=data_np_dtype)
+            elif num_segments_specified:
+                # UnsortedSegmentMin outputs the highest value of the dtype for empty segments
+                identity_value = np.array(np.finfo(data_np_dtype).max, dtype=data_np_dtype)
             else:
-                identity_value = np.iinfo(data_np_dtype).max
+                identity_value = np.array('inf', dtype=data_np_dtype)
 
         if not num_segments_specified:
             max_segment = GraphBuilder(ctx).make_reduce_max({"data": segment_inp, "axes": [0], "keepdims": 0})
@@ -287,9 +293,9 @@ class SegmentSum():
         else:
             scaling_amt = None
 
-        if scaling_amt is not None and num_segments_specified:
-            # If empty segments are possible, we must avoid division by zero
-            const_one_float = ctx.make_const(utils.make_name("const_one_float"), np.array(1, dtype=np.float32))
+        if scaling_amt is not None:
+            # Empty segments are possible (also between sorted segment ids), we must avoid division by zero
+            const_one_float = ctx.make_const(utils.make_name("const_one_float"), np.array(1, dtype=data_np_dtype))
             scaling_amt = ctx.make_node("Max", [scaling_amt, const_one_float.output[0]]).output[0]
 
 
@@ -325,6 +331,22 @@ class SegmentSum():
         else:
             reduction_result = GraphBuilder(ctx)._make_reduce_op(
                 onnx_op, 18, {"data": data_grid, "axes": [1], "keepdims": False}, op_name_scope=node.name)
+        if node.type in ["SegmentMax", "SegmentMin"] and not num_segments_specified:
+            # SegmentMax and SegmentMin output 0 for empty segments, whose grid rows only contain -1
+            max_idx = GraphBuilder(ctx).make_reduce_max({"data": scatted_grid, "axes": [1], "keepdims": 0})
+            is_empty = ctx.make_node("Less", [max_idx, zero_const_int64]).output[0]
+            if data_rank is None:
+                # Right pad with ones to match data rank
+                data_slice_rank = ctx.make_node("Shape", [identity_shape]).output[0]
+                one_tensor = helper.make_tensor("value", onnx_pb.TensorProto.INT64, dims=[1], vals=[1])
+                ones_of_shape = ctx.make_node("ConstantOfShape", [data_slice_rank], {'value': one_tensor}).output[0]
+                zero_unsq = ctx.make_const(utils.make_name('const_zero'), np.array([0], np.int64)).output[0]
+                is_empty_shape = ctx.make_node("Concat", [zero_unsq, ones_of_shape], attr={'axis': 0}).output[0]
+                is_empty = ctx.make_node("Reshape", [is_empty, is_empty_shape]).output[0]
+            elif data_rank != 1:
+                is_empty = GraphBuilder(ctx).make_unsqueeze({'data': is_empty, 'axes': list(range(1, data_rank))})
+            zero_data = ctx.make_const(utils.make_name("const_zero"), np.array(0, dtype=data_np_dtype)).output[0]
+            reduction_result = ctx.make_node("Where", [is_empty, zero_data, reduction_result]).output[0]
         if scaling_amt is not None:
             if data_rank is None:
                 # Left pad scale to match data rank
