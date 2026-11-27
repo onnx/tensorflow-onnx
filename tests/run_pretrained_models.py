@@ -245,7 +245,7 @@ class Test(object):
         fname = self.url[k + 1:]
         dir_name = fname + "_dir"
         ftype = None
-        if url.endswith(".tar.gz") or url.endswith(".tgz"):
+        if url.endswith((".tar.gz", ".tgz")):
             ftype = 'tgz'
             dir_name = fname.replace(".tar.gz", "").replace(".tgz", "")
         elif url.endswith('.zip'):

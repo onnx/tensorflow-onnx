@@ -29,8 +29,8 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Install ruff
-        run: pip install ruff
+      - name: Install lint dependencies
+        run: pip install -r requirements-lint.txt
 
       - name: Run ruff
-        run: ruff check tf2onnx tests/*.py tools
+        run: ruff check --output-format=github tf2onnx tests/*.py tools

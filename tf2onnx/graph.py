@@ -620,7 +620,7 @@ class Graph(object):
             name = utils.make_name(op_type)
 
         if op_name_scope:
-            name = "_".join([op_name_scope, name])
+            name = f"{op_name_scope}_{name}"
 
         logger.debug("Making node: Name=%s, OP=%s", name, op_type)
 

@@ -137,7 +137,7 @@ class UnitRnnRewriterBase(LoopRewriterBase):
         return True
 
     def find_cell(self, context):
-        raise NotImplementedError()
+        raise NotImplementedError
 
     def _match_cell(self, context, unittype):
         """match unit cell"""
@@ -161,7 +161,7 @@ class UnitRnnRewriterBase(LoopRewriterBase):
         return None
 
     def get_weight_and_bias(self, context):
-        raise NotImplementedError()
+        raise NotImplementedError
 
     def parse_attributes(self, context):
         return True
@@ -227,13 +227,13 @@ class UnitRnnRewriterBase(LoopRewriterBase):
         return match_result.get_op("seq_len_node")
 
     def process_weights_and_bias(self, context):
-        raise NotImplementedError()
+        raise NotImplementedError
 
     def process_var_init_nodes(self, context):
-        raise NotImplementedError()
+        raise NotImplementedError
 
     def create_rnn_node(self, context):
-        raise NotImplementedError()
+        raise NotImplementedError
 
     def process_outputs(self, context):
         for var_name, funcs in self.state_variable_handler.items():

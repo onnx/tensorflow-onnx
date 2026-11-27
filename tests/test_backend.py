@@ -1194,7 +1194,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
     def test_gather(self):
         x_val = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]], dtype=np.float32)
         idx = np.array([1, 0, 2], dtype=np.int32)
-        idx_flattened = np.array([i * x_val.shape[1] + idx for i in range(0, x_val.shape[0])])
+        idx_flattened = np.array([i * x_val.shape[1] + idx for i in range(x_val.shape[0])])
         def func(x):
             x_ = tf.gather(tf.reshape(x, [-1]), tf.constant(idx_flattened))
             return tf.identity(x_, name=_TFOUTPUT)
@@ -4239,7 +4239,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
                 # y = block_shape cannot be dynamic without change to Transpose op spec
                 crops = [[0, 1] for dim in block_shape]
                 y_val = np.array(block_shape).astype(y_type)
-                x_val = np.array([x + 1 for x in range(0, np.prod(x_shape))], dtype=x_type).reshape(x_shape)
+                x_val = np.array([x + 1 for x in range(np.prod(x_shape))], dtype=x_type).reshape(x_shape)
                 z_val = np.array(crops).astype(z_type)
                 def func(x, z):
                     y = tf.constant(dtype=y_type, value=y_val, shape=y_val.shape, name=_TFINPUT1)
@@ -4268,7 +4268,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
                 # pad 1 layer at begin and end of each dim
                 pads = [[1, 1] for dim in block_shape]
                 y_val = np.array(block_shape).astype(y_type)
-                x_val = np.array([x + 1 for x in range(0, np.prod(x_shape))], dtype=x_type).reshape(x_shape)
+                x_val = np.array([x + 1 for x in range(np.prod(x_shape))], dtype=x_type).reshape(x_shape)
                 z_val = np.array(pads).astype(z_type)
                 # x and z can be dynamic.
                 # y = block_shape cannot be dynamic without change to Transpose op spec
@@ -6128,7 +6128,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
     def test_rfft_ops_fft_length_many(self):
         for i in range(4, 7):
             for j in range(4, 7):
-                for m in range(0, 3):
+                for m in range(3):
                     with self.subTest(shape=(i, j), fft_length=j-m):
                         x_val = make_xval([i, j]).astype(np.float32)
                         def func1_length(x):
@@ -6142,7 +6142,7 @@ class BackendTests(Tf2OnnxBackendTestBase):
     def test_rfft_ops_fft_length_many_bigger(self):
         for i in range(4, 7):
             for j in range(4, 7):
-                for m in range(0, 3):
+                for m in range(3):
                     with self.subTest(shape=(i, j), fft_length=j+m):
                         x_val = make_xval([i, j]).astype(np.float32) / 10
                         def func1_length(x):
@@ -6208,8 +6208,8 @@ class BackendTests(Tf2OnnxBackendTestBase):
     def test_rfft2d_ops_fft_length_many(self):
         for i in range(7, 4, -1):
             for j in range(7, 4, -1):
-                for m in range(0, 3):
-                    for n in range(0, 3):
+                for m in range(3):
+                    for n in range(3):
                         for opt in [False, True]:
                             with self.subTest(shape=(i, j), fft_length=(m, n), optimize=opt):
                                 x_val = make_xval([i, j]).astype(np.float32) / 100

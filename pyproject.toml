@@ -80,11 +80,19 @@ target-version = "py310"
 line-length = 120
 
 [tool.ruff.lint]
+# Rule groups follow the onnx/onnx configuration. Groups that would need
+# large code changes (UP, B, SIM, C4, RUF, ...) are enabled incrementally.
 select = [
     "E",  # pycodestyle errors
     "F",  # pyflakes
-    "W",  # pycodestyle warnings
+    "FLY",  # flynt
     "I",  # isort
+    "PGH",  # pygrep-hooks
+    "PIE",  # flake8-pie
+    "RSE",  # flake8-raise
+    "T10",  # flake8-debugger
+    "W",  # pycodestyle warnings
+    "YTT",  # flake8-2020
 ]
 ignore = [
     "E501",  # line too long (let formatter handle it)

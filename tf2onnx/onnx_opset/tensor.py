@@ -1660,10 +1660,10 @@ class BatchToSpace:
             # shape to use before shuffle (part 2)
             g1 = list(range(2, 2 * blocklen + 1, 2))
             g2 = list(range(1, 2 * blocklen + 1, 2))
-            g = g1 + [0] + g2 + list(range(0, xlen + blocklen)[1 + 2 * blocklen:])
+            g = g1 + [0] + g2 + list(range(xlen + blocklen)[1 + 2 * blocklen:])
 
             # permutation values for shuffling
-            p = np.asarray(range(0, xlen + blocklen))
+            p = np.asarray(range(xlen + blocklen))
             p[0] = blocklen
             p[1] = blocklen + 1
             p[2] = 0
@@ -1841,7 +1841,7 @@ class SpaceToBatch:
             # permutation values for shuffling
             p1 = list(range(2, 2 * blocklen + 1, 2))
             p2 = list(range(1, 2 * blocklen + 1, 2))
-            perm = p1 + [0] + p2 + list(range(0, xlen + blocklen)[1 + 2 * blocklen:])
+            perm = p1 + [0] + p2 + list(range(xlen + blocklen)[1 + 2 * blocklen:])
 
             tr2 = mknode('Transpose', [x2.output[0]], {'perm': perm})
             shape2 = mknode('Concat', [minus1_const, reduced.output[0], depth.output[0]], {'axis': 0})
