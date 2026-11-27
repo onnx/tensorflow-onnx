@@ -4,4 +4,4 @@
 #
 # Pinned lint tools used by .github/workflows/lint.yml.
 # Dependabot keeps this file up to date.
-ruff==0.17.3
+ruff==0.17.6
