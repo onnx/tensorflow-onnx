@@ -472,6 +472,8 @@ class ConvTranspose:
                             "output dims cannot be smaller than input dims.")
             if -1 in input_dims:
                 node.set_attr("output_shape", new_output_shape)
+                if node.get_attr("padding").s == b"SAME":
+                    node.set_attr("auto_pad", "SAME_UPPER")
             else:
                 if "strides" in node.attr:
                     strides = parse_dims_attr(node, node.get_attr("strides").ints, spatial)
